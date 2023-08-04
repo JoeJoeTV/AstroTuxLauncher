@@ -132,6 +132,44 @@ class AstroRCON():
             # Couldn't parse JSON, return raw data
             return raw_data
     
+    def _sendreceive(self, data, recvdata=True):
+        """
+            Send data to socket and possibly receive response data if {recvdata} is True.
+            Enters the disconnected state, if the sending of data produces an arror.
+            
+            Arguments:
+                - data: The data to send to the socket
+                - [recvdata]: Wether to expect and receive response data
+            
+            Returns:
+                - response data, if {recvdata} is True and data was successfully sent ad response data successfully received
+                - True, if {recvdata} is false and the sending was successful
+                - None, if we're not connected, the data is empty or an error occurred wile sending or receiving
+        """
+        
+        # If we're not connected or data is empty, immediately return
+        if (not self.connected) or (len(data) == 0):
+            return None
+
+        # Try to send data
+        try:
+            self.socket.sendall(data)
+        except:
+            # If we get an exception, assume the connection was broken and enter disconnected state
+            self.disconnect()
+            return None
+        
+        # If we don't want to receive data following the sending, we're finished
+        if not recvdata:
+            return True
+        
+        # Receive answer data
+        try:
+            response = self._recvMessage()
+            return response
+        except:
+            return None
+        
     #
     #   Functions to send Commands to the server
     #
@@ -149,15 +187,10 @@ class AstroRCON():
             Returns: Received Data
         """
         
-        try:
-            # Escape quotation marks in player name
-            escapedName = playerName.replace('"', '\\"')
-            self.socket.sendall(f'DSSetPlayerCategoryForPlayerName "{escapedName}" {category.value}\n'.encode())
-            
-            # Receive and parse response data
-            return self._recvMessage()
-        except:
-            return None
+        # Escape quotation marks in player name
+        escapedName = playerName.replace('"', '\\"')
+        
+        return self._sendreceive(f'DSSetPlayerCategoryForPlayerName "{escapedName}" {category.value}\n'.encode(), True)
     
     def DSSetDenyUnlisted(self, state):
         """
@@ -171,13 +204,7 @@ class AstroRCON():
             Returns: Received Data
         """
         
-        try:
-            self.socket.sendall(f'DSSetDenyUnlisted {str(state).lower()}\n'.encode())
-            
-            # Receive and parse response data
-            return self._recvMessage()
-        except:
-            return None
+        return self._sendreceive(f'DSSetDenyUnlisted {str(state).lower()}\n'.encode(), True)
     
     def DSKickPlayerGuid(self, playerGuid):
         """
@@ -191,13 +218,7 @@ class AstroRCON():
             Returns: Received Data
         """
         
-        try:
-            self.socket.sendall(f'DSKickPlayerGuid {str(playerGuid)}\n'.encode())
-            
-            # Receive and parse response data
-            return self._recvMessage()
-        except:
-            return None
+        return self._sendreceive(f'DSKickPlayerGuid {str(playerGuid)}\n'.encode(), True)
     
     def DSServerStatistics(self):
         """
@@ -208,13 +229,7 @@ class AstroRCON():
             Returns: Received Data
         """
         
-        try:
-            self.socket.sendall(f'DSServerStatistics\n'.encode())
-            
-            # Receive and parse response data
-            return self._recvMessage()
-        except:
-            return None
+        return self._sendreceive(f'DSServerStatistics\n'.encode(), True)
     
     def DSListPlayers(self):
         """
@@ -225,13 +240,7 @@ class AstroRCON():
             Returns: Received Data
         """
         
-        try:
-            self.socket.sendall(f'DSListPlayers\n'.encode())
-            
-            # Receive and parse response data
-            return self._recvMessage()
-        except:
-            return None
+        return self._sendreceive(f'DSListPlayers\n'.encode(), True)
     
     def DSLoadGame(self, saveName):
         """
@@ -239,15 +248,10 @@ class AstroRCON():
             
             CMD Description: Load a new save and set it as the active save for the server
             
-            Returns: True if successful
+            Returns: True if successfully sent command
         """
         
-        try:
-            self.socket.sendall(f'DSLoadGame {saveName}\n'.encode())
-            
-            return True
-        except:
-            return None
+        return self._sendreceive(f'DSLoadGame {saveName}\n'.encode(), False)
     
     def DSSaveGame(self, name=None):
         """
@@ -258,20 +262,19 @@ class AstroRCON():
             Arguments:
                 - name(optional): Name to save game as
             
-            Returns: True if successful
+            Returns: True if successfully sent command
         """
         
-        try:
-            if (name is None):
-                self.socket.sendall(f'DSSaveGame\n'.encode())
-            else:
-                self.socket.sendall(f'DSSaveGame {name}\n'.encode())
-            
+        if (name is None):
+            response = self._sendreceive(f'DSSaveGame\n'.encode(), False)
+        else:
+            response = self._sendreceive(f'DSSaveGame {name}\n'.encode(), False)
+        
+        if (response is None):
+            return response
+        else:
             time.sleep(1.1)
-            
-            return True
-        except:
-            return None
+            return response
     
     def DSNewGame(self, saveName):
         """
@@ -282,15 +285,10 @@ class AstroRCON():
             Arguments:
                 - saveName: The name of the new save
             
-            Returns: True if successful
+            Returns: True if successfully sent command
         """
         
-        try:
-            self.socket.sendall(f'DSNewGame {saveName}\n'.encode())
-            
-            return True
-        except:
-            return None
+        return self._sendreceive(f'DSNewGame {saveName}\n'.encode(), False)
     
     def DSServerShutdown(self):
         """
@@ -298,15 +296,10 @@ class AstroRCON():
             
             CMD Description: Shutdown the server gracefully
             
-            Returns: True if successful
+            Returns: True if successfully sent command
         """
         
-        try:
-            self.socket.sendall(f'DSServerShutdown\n'.encode())
-            
-            return True
-        except:
-            return None
+        return self._sendreceive(f'DSServerShutdown\n'.encode(), False)
     
     def DSListGames(self):
         """
@@ -317,11 +310,4 @@ class AstroRCON():
             Returns: Received Data
         """
         
-        try:
-            self.socket.sendall(f'DSListGames\n'.encode())
-            
-            # Receive and parse response data
-            return self._recvMessage()
-        except:
-            return None
-        
+        return self._sendreceive(f'DSListGames\n'.encode(), True)
