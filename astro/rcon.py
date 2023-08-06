@@ -39,9 +39,13 @@ class AstroRCON():
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
     def disconnect(self):
-        self.socket.close()
         self.connected = False
-        self.socket = None
+        
+        try:
+            self.socket.close()
+            self.socket = None
+        except:
+            pass
     
     def connect(self):
         """ Tries to connect to the dedciated server RCON port """
