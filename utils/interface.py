@@ -22,6 +22,25 @@ class KeyboardThread(threading.Thread):
             else:
                 time.sleep(0.1)
 
+class NotificationManager:
+    """ Class that keeps multiple Notification Handlers and broadcasts messages to all of them """
+    
+    def __init__(self):
+        self.handlers = []
+    
+    def add_handler(self, handler):
+        """ Add notification handler to manager """
+        self.handlers.append(handler)
+    
+    def clear(self):
+        self.handlers.clear()
+    
+    def send_event(self, event_type=EventType.MESSAGE, **params):
+        """ Send event to all registered notification handlers """
+        for handler in self.handlers:
+            handler.send_event(event_type, **params)
+
+
 class EventType(Enum):
     MESSAGE = "message"
     START = "start"
@@ -33,6 +52,9 @@ class EventType(Enum):
     COMMAND = "command"
 
 def safeformat(str, **kwargs):
+    """
+        Formats the passed string {str} using the given keyword arguments, while keeping missing replacements unformatted
+    """
     
     class SafeDict(dict):
         def __missing__(self, key):
@@ -44,7 +66,7 @@ def safeformat(str, **kwargs):
 
 class NotificationHandler():
     """
-        A class representing something which can handle notifications
+        A class that can receive events and send them along as formatted messages to some endpoint
     """
     
     DEFAULT_FORMATS = {
@@ -64,6 +86,7 @@ class NotificationHandler():
         self.formats = event_formats
     
     def send_event(self, event_type=EventType.MESSAGE, **params):
+        """ Send event using the provided parameters """
         if event_type in self.whitelist:
             # Add server name to parameters for formatting
             params["server_name"] = self.server_name
