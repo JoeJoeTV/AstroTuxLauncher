@@ -46,8 +46,8 @@ class KeyboardThread(threading.Thread):
 #
 
 # Formats and colors
-LOGFORMAT = "[%(asctime)s] [%(name)s/%(threadName)s/%(levelname)s] %(message)s"
-CLOGFORMAT = "[%(asctime)s] %(log_color)s[%(name)s/%(threadName)s/%(levelname)s]%(reset)s %(message_log_color)s%(message)s"
+LOGFORMAT = "[%(asctime)s] [%(threadName)s/%(levelname)s] %(message)s"
+CLOGFORMAT = "[%(asctime)s] %(log_color)s[%(threadName)s/%(levelname)s]%(reset)s %(message_log_color)s%(message)s"
 DATEFORMAT = "%H:%M:%S"
 LOGCOLORS = {
     "DEBUG":    "white",
