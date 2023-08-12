@@ -176,6 +176,7 @@ class NotificationManager:
         for handler in self.handlers:
             handler.send_event(event_type, **params)
 
+
 def safeformat(str, **kwargs):
     """
         Formats the passed string {str} using the given keyword arguments, while keeping missing replacements unformatted
@@ -190,22 +191,25 @@ def safeformat(str, **kwargs):
     return str.format_map(replacements)
 
 DEFAULT_EVENT_FORMATS = {
-        EventType.MESSAGE: "[{name}] {message}",
-        EventType.START: "[{name}] Server started!",
-        EventType.REGISTERED: "[{name}] Server registered with Playfab!",
-        EventType.SHUTDOWN: "[{name}] Server shutdown!",
-        EventType.CRASH: "[{name}] Server crashed!",
-        EventType.PLAYER_JOIN: "[{name}] Player '{player}' joined the game",
-        EventType.PLAYER_LEAVE: "[{name}] Player '{player}' left the game",
-        EventType.COMMAND: "[{name}] Command executed: {command}"
+        EventType.MESSAGE: "{message}",
+        EventType.START: "Server started!",
+        EventType.REGISTERED: "Server registered with Playfab!",
+        EventType.SHUTDOWN: "Server shutdown!",
+        EventType.CRASH: "Server crashed!",
+        EventType.PLAYER_JOIN: "Player '{player}' joined the game",
+        EventType.PLAYER_LEAVE: "Player '{player}' left the game",
+        EventType.COMMAND: "Command executed: {command}"
     }
+
+
+# Parent classes
 
 class NotificationHandler:
     """
         A class that can receive events and send them along as formatted messages to some endpoint
     """
     
-    def __init__(self, name="Server", event_whitelist=set([e for e in EventType]), event_formats=DEFAULT_EVENT_FORMATS):
+    def __init__(self, name="Notification", event_whitelist=set([e for e in EventType]), event_formats=DEFAULT_EVENT_FORMATS):
         self.name = name
         self.whitelist = event_whitelist
         self.formats = event_formats
@@ -235,7 +239,7 @@ class QueuedNotificationHandler(NotificationHandler):
     """
     
     class NotificationThread(threading.Thread):
-        def __init__(self, callback, name="keyboard-input-thread"):
+        def __init__(self, callback, name="notification-thread"):
             self.callback = callback
             self.event_queue = Queue()
             self.wakeup_event = threading.Event()
