@@ -191,14 +191,14 @@ def safeformat(str, **kwargs):
     return str.format_map(replacements)
 
 DEFAULT_EVENT_FORMATS = {
-        EventType.MESSAGE: "{message}",
-        EventType.START: "Server started!",
-        EventType.REGISTERED: "Server registered with Playfab!",
-        EventType.SHUTDOWN: "Server shutdown!",
-        EventType.CRASH: "Server crashed!",
-        EventType.PLAYER_JOIN: "Player '{player}' joined the game",
-        EventType.PLAYER_LEAVE: "Player '{player}' left the game",
-        EventType.COMMAND: "Command executed: {command}"
+        EventType.MESSAGE       : "{message}",
+        EventType.START         : "Server started!",
+        EventType.REGISTERED    : "Server registered with Playfab!",
+        EventType.SHUTDOWN      : "Server shutdown!",
+        EventType.CRASH         : "Server crashed!",
+        EventType.PLAYER_JOIN   : "Player '{player}' joined the game",
+        EventType.PLAYER_LEAVE  : "Player '{player}' left the game",
+        EventType.COMMAND       : "Command executed: {command}"
     }
 
 
@@ -207,6 +207,11 @@ DEFAULT_EVENT_FORMATS = {
 class NotificationHandler:
     """
         A class that can receive events and send them along as formatted messages to some endpoint
+        
+        Arguments:
+            - name: A string identifying the handler
+            - event_whitelist: Events whose event is in this list are passed on as messages, else, events are discarded
+            - event_formats: Dictionary mapping EventType's to format strings that are used while formatting the message to pass on
     """
     
     def __init__(self, name="Notification", event_whitelist=set([e for e in EventType]), event_formats=DEFAULT_EVENT_FORMATS):
@@ -236,6 +241,11 @@ class NotificationHandler:
 class QueuedNotificationHandler(NotificationHandler):
     """
         Notification handler that uses a thread and a queue to handle events asynchronously
+        
+        Arguments:
+            - name: see NotificationHandler class
+            - event_whitelist: see NotificationHandler class
+            - event_formats: see NotificationHandler class
     """
     
     class NotificationThread(threading.Thread):
@@ -280,3 +290,53 @@ class QueuedNotificationHandler(NotificationHandler):
         
         time.sleep(3)
         print(message)
+
+DEFAULT_LEVEL_MAPPING = {
+        EventType.MESSAGE       : logging.INFO,
+        EventType.START         : logging.INFO,
+        EventType.REGISTERED    : logging.INFO,
+        EventType.SHUTDOWN      : logging.INFO,
+        EventType.CRASH         : logging.WARNING,
+        EventType.PLAYER_JOIN   : logging.INFO,
+        EventType.PLAYER_LEAVE  : logging.INFO,
+        EventType.COMMAND       : logging.INFO
+    }
+
+class LoggingNotificationHandler(NotificationHandler):
+    """
+        Notification handler that logs events using the logging module
+        
+        Arguments:
+            - name: see NotificationHandler class
+            - event_whitelist: see NotificationHandler class
+            - event_formats: see NotificationHandler class
+            - level_mapping: Mapping from EventType to a logging level
+    """
+    
+    def __init__(self, name="Server", event_whitelist=set([e for e in EventType]), event_formats=DEFAULT_EVENT_FORMATS, level_mapping=DEFAULT_LEVEL_MAPPING):
+        super().__init__(name, event_whitelist, event_formats)
+        
+        self.level_mapping = level_mapping
+    
+    def _send_message(self, event_type, message):
+        level = self.level_mapping[event_type]
+        
+        logging.log(level, message)
+
+class DiscordNotificationHandler(QueuedNotificationHandler):
+    """
+        Queued Notification handler that sends event messages to a discord webhook
+    """
+    
+    #TODO: Finish
+    
+    pass
+
+class NTFYNotificationHandler(QueuedNotificationHandler):
+    """
+        Queued Notificationm handler that sends event messages to an ntfy instance
+    """
+    
+    #TODO: Finish
+    
+    pass
