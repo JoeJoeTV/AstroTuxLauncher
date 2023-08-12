@@ -21,16 +21,25 @@ class KeyboardThread(threading.Thread):
     def __init__(self, callback=None, active=False, name="keyboard-input-thread"):
         self.callback = callback
         self.active = active
+        self._wakeup_event = threading.Event()
+        
         super(KeyboardThread, self).__init__(name=name)
+        
         self.daemon = True
         self.start()
+    
+    def set_active(active=True):
+        self.active = active
+        self._wakeup_event.set()
     
     def run(self):
         while True:
             if active:
                 self.callback(input())
             else:
-                time.sleep(0.1)
+                # If not active, wait 1 second before checking again, or until _wakeup_evnet is set by set_active
+                self._wakeup_event.wait(timeout=1)
+                self._wakeup_event.clear()
 
 #
 #   Logging
@@ -57,92 +66,141 @@ SECONDARY_LOG_COLORS = {
     }
 }
 
-def get_logfile_path(log_path, base_filename=None, ending="log"):
+class LauncherLogging:
     """
-        Returns a path to a new logfile based upon a base {log_path}, a {base_filename} and a file {ending}
-    """
-    
-    # If path is not a directory, raise error
-    if not os.path.isdir(log_path):
-        raise ValueError("Log Path is not a directory")
-    
-    datetime_string = datetime.today().strftime("%Y-%m-%d")
-    
-    base_string=""
-    
-    # base filename can be None, in which case it is completely omitted
-    if not (base_filename is None):
-        base_string = f"{base_filename}_"
-    
-    log_filename= f"{base_string}{datetime_string}"
-    
-    # If file with name already exists, add increasing integer until free file is found
-    i = 1
-    logfile_path = os.path.join(log_path, f"{log_filename}.{ending}")
-    
-    while os.path.exists(logfile_path):
-        # Failsave to not create endless loop
-        if i > 1000000:
-            raise FileExistsError("All log files with added integers up to 1000000 already exist, what are you doing?!")
-        
-        logfile_path = os.path.join(log_path, f"{log_filename}_{i}.{ending}")
-        i += 1
-
-    return logfile_path
-
-def setup_console_logging(log_debug=False):
-    """
-        Setup (colored) logging formats for console output using the logging module
+        Class for managing logging. Can't be instantiated!
         
         Arguments:
             - log_debug: Wether to include log messages with level logging.DEBUG
     """
     
+    log_debug = True
+    
+    handlers = {
+            "out_console": None,
+            "err_console": None,
+            "logfile": None
+        }
+    
+    logfile_path = None
+    
+    # Formatters
     colorformatter = colorlog.ColoredFormatter(CLOGFORMAT, datefmt=DATEFORMAT, log_colors=LOGCOLORS, secondary_log_colors=SECONDARY_LOG_COLORS)
-    
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    
-    # Initialize handler for standard out (Non-error console)
-    out_console = logging.StreamHandler(sys.stdout)
-    out_console.setFormatter(colorformatter)
-    out_console.setLevel(logging.DEBUG if log_debug else logging.INFO)
-    out_console.addFilter(lambda record: record.levelno <= logging.WARNING)
-    root_logger.addHandler(out_console)
-    
-    # Initialize handler for standard error (Error console)
-    err_console = logging.StreamHandler(sys.stderr)
-    err_console.setFormatter(colorformatter)
-    err_console.setLevel(logging.ERROR)
-    root_logger.addHandler(err_console)
-
-def setup_file_logging(log_path, log_debug=False):
-    """
-        Setup logging formats for log file output using the logging module
-        
-        Arguments:
-            - log_path: Path to a directory to store logs at
-            - log_debug: Wether to include log messages with level logging.DEBUG
-    """
-    
     plainformatter = logging.Formatter(LOGFORMAT, datefmt=DATEFORMAT)
-
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    
+    def __new__(cls, *args, **kwargs):
+        """ Override to prevent instantiation """
+        raise TypeError(f"{cls.__name__} cannot be instantiated")
+    
+    @classmethod
+    def prepare(cls):
+        """ Prepares the logging module. Run this before the other setup methods """
         
-    # Create logfile path if not existing yet
-    if not os.path.exists(log_path):
-        os.makedirs(log_path)
+        root_logger = logging.getLogger()
+        
+        # Remove default handler, if present
+        if len(root_logger.handlers) > 0:
+            root_logger.removeHandler(root_logger.handlers[0])
+        
+        root_logger.setLevel(logging.DEBUG)
     
-    logfile_path = get_logfile_path(log_path, "astrotux")
+    @classmethod
+    def set_log_debug(cls, log_debug=True):
+        """
+            Set wether to log debug messages
+            
+            Arguments:
+                - log_debug: Wether to include log messages with level logging.DEBUG
+        """
+        
+        cls.log_debug = log_debug
+        
+        # Set levels for out_console and logfile handlers, but NOT for err_console handler
+        level = logging.DEBUG if cls.log_debug else logging.INFO
+        
+        if cls.handlers["out_console"]:
+            cls.handlers["out_console"].setLevel(level)
+        
+        if cls.handlers["logfile"]:
+            cls.handlers["logfile"].setLevel(level)
+
+    @staticmethod
+    def get_logfile_path(log_path, base_filename=None, ending="log"):
+        """
+            Returns a path to a new logfile based upon a base {log_path}, a {base_filename} and a file {ending}
+        """
+        
+        # If path is not a directory, raise error
+        if not os.path.isdir(log_path):
+            raise ValueError("Log Path is not a directory")
+        
+        datetime_string = datetime.today().strftime("%Y-%m-%d")
+        
+        base_string=""
+        
+        # base filename can be None, in which case it is completely omitted
+        if not (base_filename is None):
+            base_string = f"{base_filename}_"
+        
+        log_filename= f"{base_string}{datetime_string}"
+        
+        # If file with name already exists, add increasing integer until free file is found
+        i = 1
+        logfile_path = os.path.join(log_path, f"{log_filename}.{ending}")
+        
+        while os.path.exists(logfile_path):
+            # Failsave to not create endless loop
+            if i > 1000000:
+                raise FileExistsError("All log files with added integers up to 1000000 already exist, what are you doing?!")
+            
+            logfile_path = os.path.join(log_path, f"{log_filename}_{i}.{ending}")
+            i += 1
+
+        return logfile_path
     
-    file_log = logging.FileHandler(logfile_path)
-    file_log.setFormatter(plainformatter)
-    file_log.setLevel(logging.DEBUG if log_debug else logging.INFO)
+    @classmethod
+    def setup_console(cls):
+        """
+            Setup (colored) logging formats for console output using the logging module
+        """
+        
+        # Initialize handler for standard out (Non-error console)
+        cls.handlers["out_console"] = logging.StreamHandler(sys.stdout)
+        cls.handlers["out_console"].setFormatter(cls.colorformatter)
+        cls.handlers["out_console"].setLevel(logging.DEBUG if cls.log_debug else logging.INFO)
+        cls.handlers["out_console"].addFilter(lambda record: record.levelno <= logging.WARNING)
+        
+        logging.getLogger().addHandler(cls.handlers["out_console"])
+        
+        # Initialize handler for standard error (Error console)
+        cls.handlers["err_console"] = logging.StreamHandler(sys.stderr)
+        cls.handlers["err_console"].setFormatter(cls.colorformatter)
+        cls.handlers["err_console"].setLevel(logging.ERROR)
+        
+        logging.getLogger().addHandler(cls.handlers["err_console"])
     
-    root_logger.addHandler(file_log)
-    
-    return file_log
+    @classmethod
+    def setup_logfile(cls, log_path):
+        """
+            Setup logging formats for log file output using the logging module
+            
+            Arguments:
+                - log_path: Path to a directory to store logs at
+        """
+            
+        # Create logfile path if not existing yet
+        if not os.path.exists(log_path):
+            os.makedirs(log_path)
+
+        logfile_path = LauncherLogging.get_logfile_path(log_path, "astrotux")
+
+        cls.handlers["logfile"] = logging.FileHandler(logfile_path)
+        cls.handlers["logfile"].setFormatter(cls.plainformatter)
+        cls.handlers["logfile"].setLevel(logging.DEBUG if cls.log_debug else logging.INFO)
+
+        logging.getLogger().addHandler(cls.handlers["logfile"])
+        
+        cls.logfile_path = logfile_path
 
 #
 #   Notifications

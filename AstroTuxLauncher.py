@@ -13,7 +13,9 @@ from utils.misc import ExcludeIfNone
 from utils.termutils import set_window_title
 from enum import Enum
 from pansi import ansi
-from utils.interface import KeyboardThread
+import utils.interface as interface
+import logging
+import sys
 
 """
 Code based on https://github.com/ricky-davis/AstroLauncher
@@ -97,6 +99,7 @@ class LauncherConfig:
     AstroServerPath: str = "AstroneerServer"    # The path, where the Astroneer DS installation should reside
     OverrideWinePath: Optional[str] = field(metadata=config(exclude=ExcludeIfNone), default=None)   # Path to wine executable, only used, if set
     WinePrefixPath: str = "winepfx"             # The path, where the Wine prefix should be stored
+    LogPath: str = "logs"                       # The path where logs should be saved
     
     
     DisableEncryption: bool = True  # Wether to disable encryption for the Astroneer DS. CURRENTLY REQUIRED TO BE "True" FOR HOSTING ON LINUX
@@ -114,8 +117,6 @@ class LauncherConfig:
             if not path.isfile(config_path):
                 raise ValueError("Specified config path doesn't point to a file!")
             
-            print("File exists, reading config...")
-            
             with open(config_path, "rb") as tf:
                 toml_dict = tomli.load(tf)
             
@@ -126,7 +127,6 @@ class LauncherConfig:
             config = LauncherConfig.from_dict(toml_dict["launcher"])
 
         else:
-            print("File doesn't exist, using default config")
             # If config file is not present, create directories and default config
             if not path.exists(path.dirname(config_path)):
                 os.makedirs(path.dirname(config_path))
@@ -145,11 +145,20 @@ class LauncherConfig:
 class AstroTuxLauncher():
     
     def __init__(self, config_path, astro_path, depotdl_path):
-        self.config_path = path.abspath(config_path)
+        # Setup basic logging
+        interface.LauncherLogging.prepare()
+        interface.LauncherLogging.setup_console()
         
-        print(f"[Init] Config Path: {self.config_path}")
-        
-        self.config = LauncherConfig.ensure_toml_config(self.config_path)
+        try:
+            self.config_path = path.abspath(config_path)
+            
+            logging.info(f"Configuration file path: {self.config_path}")
+            
+            self.config = LauncherConfig.ensure_toml_config(self.config_path)
+        except Exception as e:
+            logging.error(f"Error while loading config file ({type(e).__name__}): {str(e)}")
+            logging.error(f"Please check the config path parameter and/or config file")
+            sys.exit()
         
         # If cli parameter is specified, it overrides the config value
         if not (astro_path is None):
@@ -158,19 +167,27 @@ class AstroTuxLauncher():
         # Make sure we use absolute paths
         self.config.AstroServerPath = path.abspath(self.config.AstroServerPath)
         self.config.WinePrefixPath = path.abspath(self.config.WinePrefixPath)
+        self.config.LogPath = path.abspath(self.config.LogPath)
+        
+        # Finish setting up logging
+        interface.LauncherLogging.set_log_debug(self.config.LogDebugMessages)
+        interface.LauncherLogging.setup_logfile(self.config.LogPath)
         
         self.launcherPath = os.getcwd()
         
         if depotdl_path and (path.exists(depotdl_path)) and (path.isfile(depotdl_path)):
             self.depotdl_path = path.abspath(depotdl_path)
+            logging.info(f"DepotDownloader path overridden: {self.depotdl_path}")
+        else:
+            self.depotdl_path = None
+        
+        # Log some information about loaded paths, configs, etc.
+        logging.info(f"Working directory: {self.launcherPath}")
+        logging.debug(f"Launcher configuration (including overrides):\n{json.dumps(self.config.to_dict(encode_json=True), indent=4)}")
+        
         
         #TODO: Initialize Interface
         #TODO: Initialize Notifications
-        
-        print(BANNER_LOGO, end="")
-        print(BANNER_SUBTITLE)
-    
-    
 
 
 if __name__ == "__main__":
@@ -185,5 +202,12 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--depotdl_path", help="The path to anm existing depotdownloader executable (default: %(default)s)", dest="depotdl_path", default=None)
         
     args = parser.parse_args()
+    
+    # Print Banner
+    print(BANNER_LOGO, end="")
+    print(BANNER_SUBTITLE)
+    print("")
+    print("Unofficial Astroneer Dedicated Server Launcher for Linux")
+    print("")
     
     launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_path) 
