@@ -8,6 +8,7 @@ import urllib.error
 from urllib import request
 import ssl
 import time
+import socket
 
 def get_request(url, timeout=5):
     """
@@ -71,3 +72,15 @@ def post_request(url, headers={}, jsonData={}, timeout=5):
         response = e
     
     return response
+
+def get_public_ip():
+    url = "https://api.ipify.org?format=json"
+    x = json.load(get_request(url))
+    return x['ip']
+
+def valid_ip(address):
+    try:
+        socket.inet_aton(address)
+        return True
+    except:
+        return False
