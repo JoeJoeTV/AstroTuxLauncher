@@ -8,6 +8,8 @@ import colorlog
 import sys
 import os
 from datetime import datetime
+import argparse
+import re
 
 #
 #   User Input
@@ -21,7 +23,6 @@ class KeyboardThread(threading.Thread):
     def __init__(self, callback=None, active=False, name="keyboard-input-thread"):
         self.callback = callback
         self.active = active
-        self._wakeup_event = threading.Event()
         
         super(KeyboardThread, self).__init__(name=name)
         
@@ -30,16 +31,267 @@ class KeyboardThread(threading.Thread):
     
     def set_active(active=True):
         self.active = active
-        self._wakeup_event.set()
     
     def run(self):
         while True:
+            input_string = input()
+            
+            # Only process input, if active, else, ignore it
             if active:
-                self.callback(input())
+                self.callback(input_string)
+
+
+#
+#   Console Command Parsing
+#
+
+class IllegalArgumentError(Exception):
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return self.message
+        
+class ArgumentParser(argparse.ArgumentParser):
+    
+    def error(self, message):
+        """error(message: string)
+
+        Prints a usage message incorporating the message to stderr and
+        exits.
+
+        If you override this in a subclass, it should not return -- it
+        should either exit or raise an exception.
+        """
+        if self.exit_on_error:
+            self.print_usage(_sys.stderr)
+            args = {'prog': self.prog, 'message': message}
+            self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+        else:
+            raise IllegalArgumentError(message)
+
+class EnumStoreAction(argparse.Action):
+    """
+        Action class to use for argparse add_argument method to allow enum values to be saved directly
+    """
+    
+    def __init__(self, option_strings, dest, nargs=None, const=None, default=None, type=None, choices=None, required=False, help=None, metavar=None):
+        if type is None:
+            raise ValueError("type has to be assigned an enum")
+        
+        if not issubclass(type, Enum):
+            raise TypeError("type has to be of type or subclass of Enum")
+        
+        self._enum = type
+        self._enum_choices = [e.value for e in self._enum]
+        
+        super().__init__(option_strings=option_strings, dest=dest, nargs=nargs, const=const, default=default, type=None, choices=self._enum_choices, required=required, help=help, metavar=metavar)
+    
+    def __call__(self, parser, namespace, value, option_string=None):
+        setattr(namespace, self.dest, self._enum(value))
+
+class SubParserEnumStoreAction(argparse._SubParsersAction):
+    """
+        Action class to use for argparse add_subparsers method to get enum values from subcommand names
+    """
+    
+    def __init__(self, option_strings, prog, parser_class, dest=argparse.SUPPRESS, required=False, help=None, metavar=None, type=None):
+        if type is None:
+            raise ValueError("type has to be assigned an enum")
+        
+        if not issubclass(type, Enum):
+            raise TypeError("type has to be of type or subclass of Enum")
+
+        self._enum = type
+        self._enum_choices = [e.value for e in self._enum]
+        
+        super().__init__(option_strings=option_strings, prog=prog, parser_class=parser_class, dest=dest, required=required, help=help, metavar=metavar)
+    
+    def add_parser(self, name, **kwargs):
+        # Support specifying enum members as names
+        if isinstance(name, Enum):
+            name = name.value
+        
+        if not (name in self._enum_choices):
+            raise ValueError("name has to be a member of given enum")
+        
+        return super().add_parser(name, **kwargs)
+    
+    def __call__(self, parser, namespace, values, option_string=None):
+        # Get parser_name first, before calling super method
+        parser_name = values[0]
+        
+        # Call method from superclass first, such that the attribute is set
+        super().__call__(parser, namespace, values, option_string)
+        
+        # If requested, get attribute set by super method and convert it to an enum
+        if self.dest is not argparse.SUPPRESS:
+            val = getattr(namespace, self.dest, None)
+            
+            try:
+                val = self._enum(val)
+            except ValueError:
+                args = {'value': val,
+                        'choices': ', '.join(self._enum_choices)}
+                msg = _('unknown enum value %(parser_name)r (choices: %(choices)s)') % args
+                raise argparse.ArgumentError(self, msg)
+            
+            # Update value in namespace with converted enum
+            setattr(namespace, self.dest, val)
+
+class ConsoleParser:
+    """ Parser for console commands """
+    
+    class Command(Enum):
+        HELP = "help"
+        SHUTDOWN = "shutdown"
+        INFO = "info"
+        KICK = "kick"
+        WHITELIST = "whitelist"
+        LIST = "list"
+        SAVEGAME = "savegame"
+    
+    class WhitelistSubcommand(Enum):
+        ENABLE = "enable"
+        DISABLE = "disable"
+        STATUS = "status"
+    
+    class ListCategory(Enum):
+        ALL = "all"
+        WHITELIST = "whitelist"
+        BLACKLIST = "blacklist"
+        UNLISTED = "unlisted"
+        ADMIN = "admin"
+        OWNER = "owner"
+    
+    class SaveGameSubcommand(Enum):
+        LOAD = "load"
+        SAVE = "save"
+        NEW = "new"
+        LIST = "list"
+    
+    def __init__(self):
+        self.parser = ArgumentParser(prog="", add_help=False, exit_on_error=False)
+        
+        subparser_section = self.parser.add_subparsers(parser_class=ArgumentParser, title="Command", description=None, dest="cmd", type=ConsoleParser.Command, action=SubParserEnumStoreAction, required=True)
+        
+        self.subparsers = {}
+        
+        # Add subparsers for commands
+        
+        ## 'help' command
+        self.subparsers["help"] = subparser_section.add_parser(ConsoleParser.Command.HELP, help="Prints this help message and help messages for commands and subcommands", description="Prints this help message and help messages for commands and subcommands", add_help=False, exit_on_error=False)
+        self.subparsers["help"].add_argument("command", type=str, help="The command to get help for")
+        self.subparsers["help"].add_argument("subcommand", type=str, nargs="?", help="The subcommand to get help for")
+        
+        ## 'shutdown' command
+        self.subparsers["shutdown"] = subparser_section.add_parser(ConsoleParser.Command.SHUTDOWN, help="Shuts down the Dedicated Server", description="Shuts down the Dedicated Server", add_help=False, exit_on_error=False)
+        
+        ## 'info' command
+        self.subparsers["info"] = subparser_section.add_parser(ConsoleParser.Command.INFO, help="Gives information about the running Dedicated Server", description="Gives information about the running Dedicated Server", add_help=False, exit_on_error=False)
+        
+        ## 'kick' command
+        self.subparsers["kick"] = subparser_section.add_parser(ConsoleParser.Command.KICK, help="Kicks a player from the server", description="Kicks a player from the server", add_help=False, exit_on_error=False)
+        self.subparsers["kick"].add_argument("player", type=str, help="The GUID or name of the player to kick")
+        
+        ## 'whitelist' command
+        self.subparsers["whitelist"] = subparser_section.add_parser(ConsoleParser.Command.WHITELIST, help="Manages/Queries the whitelist status", description="Manages/Queries whitelist status", add_help=False, exit_on_error=False)
+        whitelist_section = self.subparsers["whitelist"].add_subparsers(parser_class=ArgumentParser, title="Sub-Command", description=None, dest="subcmd", type=ConsoleParser.WhitelistSubcommand, action=SubParserEnumStoreAction, required=True)
+        
+        self.subparsers["whitelist.enable"] = whitelist_section.add_parser(ConsoleParser.WhitelistSubcommand.ENABLE, add_help=False, exit_on_error=False, help="Enables the whitelist", description="Enables the whitelist")
+        self.subparsers["whitelist.disable"] = whitelist_section.add_parser(ConsoleParser.WhitelistSubcommand.DISABLE, add_help=False, exit_on_error=False, help="Disables the whitelist", description="Disables the whitelist")
+        self.subparsers["whitelist.status"] = whitelist_section.add_parser(ConsoleParser.WhitelistSubcommand.STATUS, add_help=False, exit_on_error=False, help="Queries the enabled status of the whitelist", description="Queries the enabled status of the whitelist")
+        
+        ## 'list' command
+        self.subparsers["list"] = subparser_section.add_parser(ConsoleParser.Command.LIST, help="List players. Filter by provided category, if specified", description="List players. Filter by provided category, if specified", add_help=False, exit_on_error=False, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        self.subparsers["list"].add_argument("category", type=ConsoleParser.ListCategory, action=EnumStoreAction, default=ConsoleParser.ListCategory.ALL, nargs="?", help="The category to filter the output list on")
+        
+        ## 'savegame' command
+        self.subparsers["savegame"] = subparser_section.add_parser(ConsoleParser.Command.SAVEGAME, help="Manages savegames", description="Manages savegames", add_help=False, exit_on_error=False)
+        savegame_section = self.subparsers["savegame"].add_subparsers(parser_class=ArgumentParser, title="Sub-Command", description=None, dest="subcmd", type=ConsoleParser.SaveGameSubcommand, action=SubParserEnumStoreAction, required=True)
+        
+        self.subparsers["savegame.load"] = savegame_section.add_parser(ConsoleParser.SaveGameSubcommand.LOAD, add_help=False, exit_on_error=False, help="Loads a save and sets it as the active save for the server", description="Loads a save and sets it as the active save for the server")
+        self.subparsers["savegame.load"].add_argument("save_name", type=str, help="The name of the save to load")
+        
+        self.subparsers["savegame.save"] = savegame_section.add_parser(ConsoleParser.SaveGameSubcommand.SAVE, add_help=False, exit_on_error=False, help="Saves the game instantly", description="Saves the game instantly")
+        self.subparsers["savegame.save"].add_argument("save_name", type=str, nargs="?", help="The name to save the savegame as")
+        
+        self.subparsers["savegame.new"] = savegame_section.add_parser(ConsoleParser.SaveGameSubcommand.NEW, add_help=False, exit_on_error=False, help="Create a new save and set it as active", description="Create a new save and set it as active")
+        self.subparsers["savegame.new"].add_argument("save_name", type=str, help="The name of the new save to create")
+        
+        self.subparsers["savegame.list"] = savegame_section.add_parser(ConsoleParser.SaveGameSubcommand.LIST, add_help=False, exit_on_error=False, help="List all the available savegames and marks the active one", description="List all the available savegames and marks the active one")
+    
+    def get_help(self, cmd=None, subcmd=None):
+        """
+            Get help string for provided command (and subcommand)
+            
+            Arguments:
+                - cmd: The command to get the help string of
+                - subcmd: The subcommand to get the help string of
+            
+            Returns:
+                - Status (bool): Wether a help message was found
+                - Message (str): The message
+        """
+        
+        # Cut out any dots from cmd and subcmd
+        if isinstance(cmd, str):
+            cmd = cmd.replace(".", "")
+        
+        if isinstance(subcmd, str):
+            subcmd = subcmd.replace(".", "")
+        
+        # Return correct help string
+        if (cmd == "") or (cmd is None):
+            # No command provided, return general help
+            return True, self.parser.format_help()
+        elif cmd in self.subparsers:
+            if (subcmd == "") or (subcmd is None):
+                return True, self.subparsers[cmd].format_help()
+            elif f"{cmd}.{subcmd}" in self.subparsers:
+                return True, self.subparsers[f"{cmd}.{subcmd}"].format_help()
             else:
-                # If not active, wait 1 second before checking again, or until _wakeup_evnet is set by set_active
-                self._wakeup_event.wait(timeout=1)
-                self._wakeup_event.clear()
+                return False, f"Subcommand '{subcmd}' for command '{cmd}' not found. See 'help {cmd}' for all subcommands"
+        else:
+            return False, f"Command '{cmd}' not found. See 'help' for all commands"
+    
+    def parse_input(self, input_string):
+        """
+            Parses the provided {input_string} using the command parser and returns wether it was successful and either the parameters or an error message
+            
+            Arguments:
+                - input_string: The string to parse
+            
+            Returns:
+                - Success (bool): Wether the parsing was successful
+                - Result: One of the following
+                    - If Success is True: Dictionary containing the parsed arguments
+                    - If Success is False: An error message
+        """
+        
+        # Split input by spaced but keep quoted strings together
+        input_args = [re.sub(r"^\"(.*)\"$|^'(.*)'$", r"\1\2", t) for t in re.split(r" ?(\".*?\") ?| ?('.*?') ?| ", input_string) if (t is not None) and (t != "")]
+        
+        try:
+            # Parse split input string using argument parser
+            args = vars(self.parser.parse_args(input_args))
+        except argparse.ArgumentError as e:
+            if e.argument_name == "cmd":
+                return False, f"Unknown command: {e.message}"
+            elif e.argument_name == "subcmd":
+                return False, f"Unknown subcommand: {e.message}"
+            else:
+                return False, str(e)
+        except IllegalArgumentError as e:
+            return False, e.message
+        
+        if args["cmd"] == ConsoleParser.Command.HELP:
+            success, msg = self.get_help(args["command"], args["subcommand"])
+            
+            return True, {"cmd": cmd, "message": msg} if success else False, msg
+        else:
+            return True, args
+
 
 #
 #   Logging
