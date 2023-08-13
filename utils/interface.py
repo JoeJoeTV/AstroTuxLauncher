@@ -46,6 +46,8 @@ class KeyboardThread(threading.Thread):
 #
 
 class IllegalArgumentError(Exception):
+    """ Is raised by custom ArgumentParser subclass, when an error occurs that would normally exit the program """
+    
     def __init__(self, message):
         self.message = message
 
@@ -53,6 +55,7 @@ class IllegalArgumentError(Exception):
         return self.message
         
 class ArgumentParser(argparse.ArgumentParser):
+    """ Subclass overriding the error method to stop the ArgumentParse from exiting the whole program, if a parsing error occurs """
     
     def error(self, message):
         """error(message: string)
@@ -181,7 +184,7 @@ class ConsoleParser:
         
         ## 'help' command
         self.subparsers["help"] = subparser_section.add_parser(ConsoleParser.Command.HELP, help="Prints this help message and help messages for commands and subcommands", description="Prints this help message and help messages for commands and subcommands", add_help=False, exit_on_error=False)
-        self.subparsers["help"].add_argument("command", type=str, help="The command to get help for")
+        self.subparsers["help"].add_argument("command", type=str, nargs="?", help="The command to get help for")
         self.subparsers["help"].add_argument("subcommand", type=str, nargs="?", help="The subcommand to get help for")
         
         ## 'shutdown' command
@@ -288,7 +291,7 @@ class ConsoleParser:
         if args["cmd"] == ConsoleParser.Command.HELP:
             success, msg = self.get_help(args["command"], args["subcommand"])
             
-            return True, {"cmd": cmd, "message": msg} if success else False, msg
+            return (True, {"cmd": args["cmd"], "message": msg}) if success else (False, msg)
         else:
             return True, args
 
