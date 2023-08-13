@@ -27,7 +27,6 @@ class KeyboardThread(threading.Thread):
         super(KeyboardThread, self).__init__(name=name)
         
         self.daemon = True
-        self.start()
     
     def set_active(active=True):
         self.active = active
