@@ -148,6 +148,7 @@ class ConsoleParser:
     class Command(Enum):
         HELP = "help"
         SHUTDOWN = "shutdown"
+        RESTART = "restart"
         INFO = "info"
         KICK = "kick"
         WHITELIST = "whitelist"
@@ -180,7 +181,7 @@ class ConsoleParser:
         
         self.subparsers = {}
         
-        # Add subparsers for commands
+        # Add subparsers and arguments for commands
         
         ## 'help' command
         self.subparsers["help"] = subparser_section.add_parser(ConsoleParser.Command.HELP, help="Prints this help message and help messages for commands and subcommands", description="Prints this help message and help messages for commands and subcommands", add_help=False, exit_on_error=False)
@@ -189,6 +190,9 @@ class ConsoleParser:
         
         ## 'shutdown' command
         self.subparsers["shutdown"] = subparser_section.add_parser(ConsoleParser.Command.SHUTDOWN, help="Shuts down the Dedicated Server", description="Shuts down the Dedicated Server", add_help=False, exit_on_error=False)
+        
+        ## 'shutdown' command
+        self.subparsers["restart"] = subparser_section.add_parser(ConsoleParser.Command.RESTART, help="Restarts the Dedicated Server", description="Restarts the Dedicated Server", add_help=False, exit_on_error=False)
         
         ## 'info' command
         self.subparsers["info"] = subparser_section.add_parser(ConsoleParser.Command.INFO, help="Gives information about the running Dedicated Server", description="Gives information about the running Dedicated Server", add_help=False, exit_on_error=False)
