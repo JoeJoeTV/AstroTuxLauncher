@@ -103,7 +103,7 @@ class DedicatedServerConfig:
 class EngineConfig:
     Port: int = 7777
     AllowEncryption: bool = False
-    Paths: list = list[str]
+    Paths: list[str] = field(default_factory=list)
     MaxClientRate: int = 1000000
     MaxInternetClientRate: int = 1000000
     
@@ -183,8 +183,10 @@ class EngineConfig:
             if not path.exists(path.dirname(config_path)):
                 os.makedirs(path.dirname(config_path))
             
-            config = DedicatedServerConfig()
-                
+            config = EngineConfig()
+        
+        print(config.spread())
+        
         # Write config back to file to add missing entried and remove superflous ones
         # In the case of the file not existing prior, it will be created
         new_ini_config = INIMultiConfig(confDict=config.spread())
