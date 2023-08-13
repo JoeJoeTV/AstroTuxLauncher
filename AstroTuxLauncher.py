@@ -9,13 +9,19 @@ import dataclasses
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config
 from typing import Optional
-from utils.misc import ExcludeIfNone
+from utils.misc import ExcludeIfNone, read_build_version
 from utils.termutils import set_window_title
 from enum import Enum
 from pansi import ansi
 import utils.interface as interface
 import logging
 import sys
+from queue import Queue
+import shutil
+from utils import steam
+from utils.requests import get_request
+from packaging import version
+
 
 """
 Code based on https://github.com/ricky-davis/AstroLauncher
@@ -44,8 +50,10 @@ HELP_COMMAND = f"""What {NAME} should do
     - update: Updates the Astroneer Dedicated Server using steamcmd
 """
 
-DEPOTDL_PATH = "depotdownloader"
+DEPOTDL_PATH = "libs/depotdownloader"
+DS_EXECUTABLE = "AstroServer.exe"
 
+ASTRO_SERVER_STATS_URL = "https://servercheck.spycibot.com/stats"
 
 class LauncherCommand(Enum):
     """ Represents the command passed to the launcher """
@@ -85,8 +93,7 @@ class NotificationConfig:
 @dataclass_json
 @dataclass
 class LauncherConfig:
-    AutoInstallServer: bool = False # Wether to automatically install the Astroneer DS at start if not found
-    AutoUpdateServer: bool = True   # Wether to automatically update the Astroneer DS at start if update is available
+    AutoUpdateServer: bool = True   # Wether to automatically install/update the Astroneer DS at start if update is available
     
     CheckNetwork: bool = True       # Wether to perform a network check before starting the Astroneer DS
     OverwritePublicIP: bool = False # Wether to overwrite the PublicIP DS config option with the fetched public IP
@@ -144,7 +151,7 @@ class LauncherConfig:
 
 class AstroTuxLauncher():
     
-    def __init__(self, config_path, astro_path, depotdl_path):
+    def __init__(self, config_path, astro_path, depotdl_exec):
         # Setup basic logging
         interface.LauncherLogging.prepare()
         interface.LauncherLogging.setup_console()
@@ -175,20 +182,131 @@ class AstroTuxLauncher():
         
         self.launcherPath = os.getcwd()
         
-        if depotdl_path and (path.exists(depotdl_path)) and (path.isfile(depotdl_path)):
-            self.depotdl_path = path.abspath(depotdl_path)
-            logging.info(f"DepotDownloader path overridden: {self.depotdl_path}")
-        else:
-            self.depotdl_path = None
+        self.depotdl_path = None
+        
+        # If argument is given, file has to exist
+        if depotdl_exec:
+            # If {depotdl_exec} is a command, get full path
+            wpath = shutil.which(depotdl_exec)
+            if wpath is not None:
+                depotdl_exec = wpath
+            
+            if path.isfile(depotdl_exec):
+                self.depotdl_path = path.abspath(depotdl_exec)
+                logging.info(f"DepotDownloader path overridden: {self.depotdl_path}")
+        
+        # If argument is not given, default path is used and may not exists yet, so create directories
+        if self.depotdl_path is None:
+            self.depotdl_path = path.abspath(DEPOTDL_PATH)
+            os.makedirs(path.dirname(self.depotdl_path))
         
         # Log some information about loaded paths, configs, etc.
         logging.info(f"Working directory: {self.launcherPath}")
         logging.debug(f"Launcher configuration (including overrides):\n{json.dumps(self.config.to_dict(encode_json=True), indent=4)}")
         
+        # Initialize console command parser
+        self.console_parser = interface.ConsoleParser()
+        self.cmd_queue = Queue()
         
-        #TODO: Initialize Interface
-        #TODO: Initialize Notifications
+        # Initialize Input Thread to handle console input later. Don't start thread just yet
+        self.input_thread = interface.KeyboardThread(self.on_input, False)
+        
+        # Initialize notification objects
+        self.notifications = interface.NotificationManager()
+        
+        self.notifications.add_handler(interface.LoggingNotificationHandler())
+        #TODO: Initialize Webhook handlers
+    
+    def check_ds_executable(self):
+        """ Checks is Astroneer DS executable exists and is a file """
+        
+        execpath = os.path.join(self.config.AstroServerPath, DS_EXECUTABLE)
+        
+        return os.path.exists(execpath) and os.path.isfile(execpath)
 
+    def on_input(self, input_string):
+        """ Callback method to handle console input """
+        
+        # Parse console input
+        success, result = self.console_parser.parse_input(input_string)
+        
+        if success:
+            if result["cmd"] == interface.ConsoleParser.Command.HELP:
+                # If it's a help command, we don't need to add it to the command queue as there is nothing to be done
+                logging.info(result["message"])
+            else:
+                # Add any other command to the command queue to be processed later
+                self.cmd_queue.put(result)
+        else:
+            # If an error occured, {result} is just a message, so log it to console
+            # We send event for command first, when it's processed
+            logging.error(result)
+
+    def update_server(self):
+        """
+            Installs/Updates the Astroneer Dedicated Server.
+            Also ensures that DepotDownloader is present
+        """
+        
+        # If DepotDownloader executable doesn't exists yet, download it
+        if not path.exists(self.depotdl_path):
+            logging.info("Downloading DepotDownloader...")
+            steam.dl_depotdownloader(path.dirname(self.depotdl_path), path.basename(self.depotdl_path))
+        
+        logging.info("Downloading Astroneer Dedicated Server...")
+        success = steam.update_app(exec_path=self.depotdl_path, app="728470", os="windows", directory=self.config.AstroServerPath)
+        
+        self.buildversion = read_build_version(self.config.AstroServerPath)
+        
+        if success and (self.buildversion is not None):
+            logging.info(f"Sucessfully downloaded Astroneer Dedicated Server version {self.buildversion}")
+        else:
+            logging.error("Error while downloading Astroneer Dedicated Server")
+    
+    def check_server_update(self, force_update=False):
+        """
+            Checks if an update for the Astroneer Dedicated Server is available or if it needs to be installed.
+            Also performs update if set in config or {force_update} is set to True
+        """
+        
+        oldversion = read_build_version(self.config.AstroServerPath)
+        
+        do_update = False
+        installed = True
+        
+        if (oldversion is None) or not self.check_ds_executable():
+            # No version is present yet or executable not present, we need an update/installation
+            logging.warn("Astroneer Dedicated Server is not installed yet")
+            do_update = True
+            installed = False
+        else:
+            # Get current server version from Spycibot endpoint
+            try:
+                data = json.load(get_request(ASTRO_SERVER_STATS_URL))
+                newversion = data["LatestVersion"]
+                
+                if version.parse(newversion) > version.parse(oldversion):
+                    logging.warn(f"Astroneer Dedicated Server update available ({oldversion} -> {newversion})")
+                    do_update = True
+            except Exception as e:
+                logging.error(f"Error occured while checking for newest version: {str(e)}")
+
+        if do_update:
+            if self.config.AutoUpdateServer:
+                if installed:
+                    logging.info("Automatically updating server")
+                else:
+                    logging.info("Automatically installing server")
+            
+            if self.config.AutoUpdateServer or force_update:
+                self.update_server()
+            else:
+                logging.info("Not installing/updating automatically")
+        else:
+            if force_update:
+                logging.info("Nothing to do")
+    
+        
 
 if __name__ == "__main__":
     # Set terminal window title
@@ -196,10 +314,10 @@ if __name__ == "__main__":
     
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=[e.value for e in LauncherCommand], help=HELP_COMMAND)
+    parser.add_argument("command", type=LauncherCommand, action=interface.EnumStoreAction, help=HELP_COMMAND)
     parser.add_argument("-c", "--config_path", help="The location of the configuration file (default: %(default)s)", type=str, dest="config_path", default="launcher.toml")
     parser.add_argument("-p", "--astro_path", help="The path of the Astroneer Dedicated Server installation (default: %(default)s)", dest="astro_path", default=None)
-    parser.add_argument("-d", "--depotdl_path", help="The path to anm existing depotdownloader executable (default: %(default)s)", dest="depotdl_path", default=None)
+    parser.add_argument("-d", "--depotdl_exec", help="The path to anm existing depotdownloader executable (default: %(default)s)", dest="depotdl_exec", default=None)
         
     args = parser.parse_args()
     
@@ -210,4 +328,14 @@ if __name__ == "__main__":
     print("Unofficial Astroneer Dedicated Server Launcher for Linux")
     print("")
     
-    launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_path) 
+    launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec)
+    
+    if args["command"] == LauncherCommand.INSTALL:
+        logging.info("Installing Astroneer Dedicated Server...")
+        launcher.update_server()
+    elif args["command"] == LauncherCommand.UPDATE:
+        logging.info("Checking for available updates to the Astroneer Dedicated Server...")
+        launcher.check_server_update(force_update=True)
+    elif args["command"] == LauncherCommand.START:
+        #TODO: Finish
+        pass
