@@ -154,5 +154,7 @@ cython_debug/
 
 # Project specific
 test/
+AstroneerServer/
+libs/
 *.ipynb
 *.toml
