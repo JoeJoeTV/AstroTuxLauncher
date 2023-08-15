@@ -198,7 +198,7 @@ class AstroTuxLauncher():
         # If argument is not given, default path is used and may not exists yet, so create directories
         if self.depotdl_path is None:
             self.depotdl_path = path.abspath(DEPOTDL_PATH)
-            os.makedirs(path.dirname(self.depotdl_path))
+            os.makedirs(path.dirname(self.depotdl_path), exist_ok=True)
         
         # Log some information about loaded paths, configs, etc.
         logging.info(f"Working directory: {self.launcherPath}")
@@ -276,7 +276,7 @@ class AstroTuxLauncher():
         
         if (oldversion is None) or not self.check_ds_executable():
             # No version is present yet or executable not present, we need an update/installation
-            logging.warn("Astroneer Dedicated Server is not installed yet")
+            logging.warning("Astroneer Dedicated Server is not installed yet")
             do_update = True
             installed = False
         else:
@@ -306,7 +306,9 @@ class AstroTuxLauncher():
             if force_update:
                 logging.info("Nothing to do")
     
-        
+    def start_server(self):
+        #TODO: Finish
+        pass
 
 if __name__ == "__main__":
     # Set terminal window title
@@ -330,12 +332,12 @@ if __name__ == "__main__":
     
     launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec)
     
-    if args["command"] == LauncherCommand.INSTALL:
+    if args.command == LauncherCommand.INSTALL:
         logging.info("Installing Astroneer Dedicated Server...")
         launcher.update_server()
-    elif args["command"] == LauncherCommand.UPDATE:
+    elif args.command == LauncherCommand.UPDATE:
         logging.info("Checking for available updates to the Astroneer Dedicated Server...")
         launcher.check_server_update(force_update=True)
-    elif args["command"] == LauncherCommand.START:
+    elif args.command == LauncherCommand.START:
         #TODO: Finish
         pass
