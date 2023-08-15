@@ -8,7 +8,7 @@ import urllib.error
 from urllib import request
 import ssl
 import time
-from utils.requests import get_request, post_request
+from utils.net import get_request, post_request
 
 #
 #   Methods for interacting with the Playfab Astroneer API

@@ -4,7 +4,7 @@ from dataclasses_json import dataclass_json, config, global_config
 import uuid
 from astro.inimulticonfig import INIMultiConfig
 from IPy import IP
-from utils  import requests
+from utils import net
 import logging
 from os import path
 from utils.misc import ExcludeIfNone
@@ -170,7 +170,7 @@ class DedicatedServerConfig:
             config = DedicatedServerConfig()
         
         # Check Public IP field
-        ip_valid = requests.valid_ip(config.PublicIP)
+        ip_valid = net.valid_ip(config.PublicIP)
         
         if ip_valid and (IP(config.PublicIP).iptype() != "PUBLIC"):
             ip_valid = False
@@ -180,7 +180,7 @@ class DedicatedServerConfig:
         if overwrite_ip or not ip_valid:
             try:
                 logging.info("Overwriting PublicIP field in Dedicated Server config")
-                config.PublicIP = requests.get_public_ip()
+                config.PublicIP = net.get_public_ip()
             except:
                 if ip_valid:
                     logging.warn("Could not update PublicIP field")
