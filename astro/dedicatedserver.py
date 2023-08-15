@@ -1,19 +1,110 @@
 import dataclasses
 from dataclasses import dataclass, field
-from dataclasses_json import dataclass_json, config
+from dataclasses_json import dataclass_json, config, global_config
 import uuid
 from astro.inimulticonfig import INIMultiConfig
 from IPy import IP
-import utils.misc as misc
 from utils  import requests
 import logging
 from os import path
+from utils.misc import ExcludeIfNone
+from astro.rcon import PlayerCategory
+import re
+from typing import Optional, List
+import json
+
+#
+#   Configuration
+#
 
 def encode_fakefloat(num):
     return f"{str(num)}.000000"
 
 def decode_fakefloat(string):
     return round(float(string))
+
+class PlayerProperties:
+    """ Class representing a PlayerProperties list entry used in the DS config """
+    
+    ATTRIBUTES = {
+        "PlayerFirstJoinName": str,
+        "PlayerCategory": PlayerCategory,
+        "PlayerGuid": str,
+        "PlayerRecentJoinName": str
+    }
+    
+    def __init__(self, PlayerFirstJoinName="", PlayerCategory=PlayerCategory.UNLISTED, PlayerGuid="", PlayerRecentJoinName=""):
+        self.PlayerFirstJoinName = PlayerFirstJoinName
+        self.PlayerCategory = PlayerCategory
+        self.PlayerGuid = PlayerGuid
+        self.PlayerRecentJoinName = PlayerRecentJoinName
+    
+    def to_string(self):
+        """ Return string representation of PlayerProperties Object """
+        return f'(PlayerFirstJoinName="{self.PlayerFirstJoinName}",PlayerCategory={self.PlayerCategory.value},PlayerGuid="{self.PlayerGuid}",PlayerRecentJoinName="{self.PlayerRecentJoinName}")'
+    
+    @staticmethod
+    def from_string(string):
+        """ Create a PlayerProperties object from string stored in DS config """
+        # Find string encased by parenthesies
+        match = re.search(r"\((.*)\)", string)
+        
+        if not match:
+            raise ValueError("Invalid PlayerProperties string string")
+        
+        # Get content inside of parenthesies and split k-v-pairs into list
+        args = match.group(1).split(",")
+        
+        kwargs = {}
+        
+        # For each argument, split by = to seperate key from value
+        for arg in args:
+            arg = arg.split("=", 1)
+            
+            # If no '=' found, the string is invalid
+            if len(arg) != 2:
+                raise ValueError("Invalid PlayerProperties string string")
+            
+            key = arg[0].strip()
+            value = arg[1].strip()
+            
+            # Remove quotes(single and double) from value
+            value = re.sub(r"\"(.*?)\"", r"\1", re.sub(r"'(.*?)'", r"\1", value))
+            
+            # If key is a recognized argument, cast to correct type
+            # Ignore keys that are unknown
+            if key in PlayerProperties.ATTRIBUTES:
+                atype = PlayerProperties.ATTRIBUTES[key]
+                
+                kwargs[key] = atype(value)
+        
+        pe = PlayerProperties(**kwargs)
+        
+        return pe
+
+    # See https://github.com/lidatong/dataclasses-json/issues/122
+    @staticmethod
+    def list_encoder(pp_list):
+        """ Encode list of PlayerProperties objects into string list to be used by dataclass """
+        return [pp.to_string() for pp in pp_list]
+    
+    # See https://github.com/lidatong/dataclasses-json/issues/122
+    @staticmethod
+    def list_decoder(value):
+        """ Decode list of strings into list of PlayerProperties """
+        # Directly return value, if already decoded
+        if value and isinstance(value[0], PlayerProperties):
+            return value
+        
+        return [PlayerProperties.from_string(pp_str) for pp_str in value]
+
+# Metadata for PlayerProperties List field
+pp_list_field = {
+    "dataclasses_json": {
+        "encoder": PlayerProperties.list_encoder,
+        "decoder": PlayerProperties.list_decoder,
+    }
+}
 
 @dataclass_json
 @dataclass
@@ -40,9 +131,16 @@ class DedicatedServerConfig:
     ConsolePort: int = 1234
     ConsolePassword: str = uuid.uuid4().hex
     HeartbeatInterval: int = 55
+    ExitSemaphore: Optional[str] = field(metadata=config(exclude=ExcludeIfNone), default=None)
+    PlayerProperties: list[PlayerProperties] = field(default_factory=list, metadata=pp_list_field)
     
     @staticmethod
     def ensure_config(config_path, overwrite_ip=False):
+        """
+            Reads the dedicated server configuration file at the given config_path, if present, baselines it using dataclass and exports it again.
+            If the config file is not present yet, also creates it.
+            Also ensures PublicIP setting is set correctly and overwrites it according to {overwrite_ip} and forces some settings to specific values.
+        """
         
         config = None
         
@@ -108,10 +206,7 @@ class EngineConfig:
     MaxInternetClientRate: int = 1000000
     
     def collect(self, spreadDict):
-        """
-            Collects the config values from {spreadDict}
-        """
-        
+        """ Collects the config values from {spreadDict} """
         try:
             self.Port = int(spreadDict["URL"]["Port"])
         except:
@@ -138,9 +233,7 @@ class EngineConfig:
             pass
     
     def spread(self):
-        """
-            Spreads the config values out into a dict representing the structure used by the Engine config
-        """
+        """ Spreads the config values out into a dict representing the structure used by the Engine config """
         
         new_dict = {}
         
@@ -161,6 +254,10 @@ class EngineConfig:
     
     @staticmethod
     def ensure_config(config_path, disable_encryption=True):
+        """
+            Reads the engine configuration file at the given config_path, if present, baselines it using dataclass and exports it again.
+            If the config file is not present yet, also creates it.
+        """
         
         config = None
         
@@ -184,9 +281,7 @@ class EngineConfig:
                 os.makedirs(path.dirname(config_path))
             
             config = EngineConfig()
-        
-        print(config.spread())
-        
+                
         # Write config back to file to add missing entried and remove superflous ones
         # In the case of the file not existing prior, it will be created
         new_ini_config = INIMultiConfig(confDict=config.spread())
@@ -194,8 +289,11 @@ class EngineConfig:
         new_ini_config.write_file(config_path)
         
         return config
-        
 
+
+#
+#   Dedicated Server related logic
+#
 
 class AstroDedicatedServer:
     pass
