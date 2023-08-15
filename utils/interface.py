@@ -2,7 +2,7 @@ import threading
 import time
 import asyncio
 from enum import Enum
-from queue import Queue
+from queue import Queue, Empty
 import logging
 import colorlog
 import sys
@@ -10,6 +10,7 @@ import os
 from datetime import datetime
 import argparse
 import re
+import subprocess
 
 #
 #   User Input
@@ -656,3 +657,44 @@ class NTFYNotificationHandler(QueuedNotificationHandler):
     #TODO: Finish
     
     pass
+
+#
+#   Miscellaneous
+#
+
+PROC_FORMAT="[{name}] {message}"
+
+def run_proc_with_logging(args, name, format=PROC_FORMAT, sleep_time=0.1, level=logging.INFO, **popen_args):
+    """ Runs a process and outputs its output using the logging module and waits for it to finish """
+    
+    # Create process with piped stdout/stderr
+    process = subprocess.Popen(args, stderr=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=1, close_fds=True, text=True, **popen_args)
+    
+    def enqueue_output(out, queue):
+        """ Reads lines from {out} and adds them to {queue} """
+        for line in iter(out.readline, b''):
+            queue.put(line)
+        out.close()
+    
+    # Output queue
+    out_queue = Queue()
+    
+    # Thread for adding to the queue asynchronously
+    read_thread = threading.Thread(target=enqueue_output, args=(process.stdout, out_queue))
+    read_thread.daemon = True
+    read_thread.start()
+    
+    # Wait until process is finished and handle output
+    while process.poll() is None:
+        try:
+            line = out_queue.get_nowait()
+        except Empty:
+            # If queue is empty, simply pass on
+            pass
+        else:
+            line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
+            logging.log(level, safeformat(format, name=name, message=line))
+        
+        time.sleep(sleep_time)
+    
+    return process.poll()
