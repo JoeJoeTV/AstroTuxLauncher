@@ -63,6 +63,7 @@ class LauncherCommand(Enum):
     UPDATE = "update"
 
 
+
 #
 #   Configuration classes
 #
@@ -165,7 +166,7 @@ class AstroTuxLauncher():
         except Exception as e:
             logging.error(f"Error while loading config file ({type(e).__name__}): {str(e)}")
             logging.error(f"Please check the config path parameter and/or config file")
-            sys.exit()
+            self.exit()
         
         # If cli parameter is specified, it overrides the config value
         if not (astro_path is None):
@@ -175,6 +176,20 @@ class AstroTuxLauncher():
         self.config.AstroServerPath = path.abspath(self.config.AstroServerPath)
         self.config.WinePrefixPath = path.abspath(self.config.WinePrefixPath)
         self.config.LogPath = path.abspath(self.config.LogPath)
+        
+        # Apply wine path override if possible and check that is exists
+        self.wineexec = shutil.which("wine")
+        self.wineserverexec = shutil.which("wineserver")
+        
+        if self.config.OverrideWinePath is not None and path.isfile(self.config.OverrideWinePath):
+            self.wineexec = path.abspath(self.config.OverrideWinePath)
+            self.wineserverexec = path.join(path.dirname(self.wineexec), "wineserver")
+        
+        if (self.wineexec is None) or (self.wineserverexec is None):
+            logging.error("Wine (or Wineserver) executable not found!")
+            logging.error("Make sure that you have wine installed and accessible")
+            logging.error("or set 'OverrideWinePath' config option to the path of the wine executable")
+            self.exit()
         
         # Finish setting up logging
         interface.LauncherLogging.set_log_debug(self.config.LogDebugMessages)
@@ -305,10 +320,18 @@ class AstroTuxLauncher():
         else:
             if force_update:
                 logging.info("Nothing to do")
-    
+        
     def start_server(self):
         #TODO: Finish
         pass
+    
+    def exit(self, graceful=False, reason=None):
+        if reason:
+            logging.info(f"Quitting... (Reason: {reason})")
+        else:
+            logging.info("Quitting...")
+        
+        sys.exit(0 if graceful else 1)
 
 if __name__ == "__main__":
     # Set terminal window title
@@ -332,12 +355,15 @@ if __name__ == "__main__":
     
     launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec)
     
-    if args.command == LauncherCommand.INSTALL:
-        logging.info("Installing Astroneer Dedicated Server...")
-        launcher.update_server()
-    elif args.command == LauncherCommand.UPDATE:
-        logging.info("Checking for available updates to the Astroneer Dedicated Server...")
-        launcher.check_server_update(force_update=True)
-    elif args.command == LauncherCommand.START:
-        #TODO: Finish
-        pass
+    try:
+        if args.command == LauncherCommand.INSTALL:
+            logging.info("Installing Astroneer Dedicated Server...")
+            launcher.update_server()
+        elif args.command == LauncherCommand.UPDATE:
+            logging.info("Checking for available updates to the Astroneer Dedicated Server...")
+            launcher.check_server_update(force_update=True)
+        elif args.command == LauncherCommand.START:
+            #TODO: Finish
+            pass
+    except KeyboardInterrupt:
+        launcher.exit(reason="CTRL + C pressed")
