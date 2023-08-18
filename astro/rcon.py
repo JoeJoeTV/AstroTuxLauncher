@@ -280,7 +280,7 @@ class AstroRCON():
             time.sleep(1.1)
             return response
     
-    def DSNewGame(self, saveName):
+    def DSNewGame(self, save_name=None):
         """
             Sends the 'DSNewGame' command to the Dedicated Server.
             
@@ -292,7 +292,10 @@ class AstroRCON():
             Returns: True if successfully sent command
         """
         
-        return self._sendreceive(f'DSNewGame {saveName}\n'.encode(), False)
+        if save_name is None:
+            return self._sendreceive(f'DSNewGame\n'.encode(), False)
+        else:
+            return self._sendreceive(f'DSNewGame {save_name}\n'.encode(), False)
     
     def DSServerShutdown(self):
         """
