@@ -7,11 +7,17 @@ from IPy import IP
 from utils import net
 import logging
 from os import path
+import os
 from utils.misc import ExcludeIfNone
 from astro.rcon import PlayerCategory
 import re
 from typing import Optional, List
 import json
+from astro.rcon import AstroRCON, PlayerCategory
+from datetime import datetime
+import subprocess
+import pathvalidate
+import time
 
 #
 #   Configuration
@@ -165,7 +171,7 @@ class DedicatedServerConfig:
         else:
             # If config file is not present, create directories and default config
             if not path.exists(path.dirname(config_path)):
-                os.makedirs(path.dirname(config_path))
+                os.makedirs(path.dirname(config_path), exist_ok=True)
             
             config = DedicatedServerConfig()
         
@@ -278,7 +284,7 @@ class EngineConfig:
         else:
             # If config file is not present, create directories and default config
             if not path.exists(path.dirname(config_path)):
-                os.makedirs(path.dirname(config_path))
+                os.makedirs(path.dirname(config_path), exist_ok=True)
             
             config = EngineConfig()
                 
@@ -295,6 +301,384 @@ class EngineConfig:
 #   Dedicated Server related logic
 #
 
-class AstroDedicatedServer:
-    pass
+@dataclass_json
+@dataclass
+class ServerStatistics:
+    """ Stores the current data received from the 'DSServerStatistics' RCON command """
+    
+    build: str = None
+    ownerName: str = None
+    maxInGamePlayers: int = None
+    playersKnownToGame: int = None
+    saveGameName: str = None
+    playerActivityTimeout: int = None
+    secondsInGame: int = None
+    serverName: str = None
+    serverURL: str = None
+    averageFPS: float = None
+    hasServerPassword: bool = None
+    isEnforcingWhitelist: bool = None
+    creativeMode: bool = None
+    isAchievementProgressionDisabled: bool = None
 
+@dataclass
+class PlayerInfo:
+    playerGuid: str = None
+    playerCategory: PlayerCategory = None
+    playerName: str = None
+    inGame: bool = None
+    index: int = None
+
+@dataclass_json
+@dataclass
+class PlayerList:
+    """ Stores the current data received from the 'DSListPlayers' RCON command """
+    
+    playerInfo: list[PlayerInfo] = field(default_factory=list)
+
+
+def encoder_datetime_gameinfo(dt):
+    return dt.strftime("%Y.%m.%d-%H.%M.%S")
+
+def decoder_datetime_gameinfo(string):
+    return datetime.strptime(string, "%Y.%m.%d-%H.%M.%S")
+
+@dataclass
+class GameInfo:
+    name: str = None
+    date: datetime = field(metadata=config(encoder=encoder_datetime_gameinfo, decoder=decoder_datetime_gameinfo), default=None)
+    bHasBeenFlaggedAsCreativeModeSave: bool = None
+
+@dataclass_json
+@dataclass
+class GameList:
+    """ Stores the current data received from the 'DSListGames' RCON command """
+    
+    activeSaveName: str = None
+    gameList: list[GameInfo] = field(default_factory=list)
+
+class ServerStatus(Enum):
+    OFF: "off"
+    STARTING: "starting"
+    RUNNING: "running"
+    STOPPING: "stopping"
+
+ASTRO_DS_CONFIG_PATH = "Astro/Saved/Config/WindowsServer/"
+
+class AstroDedicatedServer:
+    
+    def __init__(self, launcher):
+        self.launcher = launcher
+        
+        self.astro_path = self.launcher.config.AstroServerPath
+        self.wine_exec = self.launcher.wineexec
+        self.wineserver_exec = self.launcher.wineserverexec
+        self.wine_pfx = self.launcher.config.WinePrefixPath
+        
+        # Variables for storing data received from server
+        self.curr_server_stat = None
+        self.curr_player_list = None
+        self.curr_game_list = None
+        
+        # Load configuration
+        ds_config_path = path.join(self.astro_path, ASTRO_DS_CONFIG_PATH, "AstroServerSettings.ini")
+        engine_config_path = path.join(self.astro_path, ASTRO_DS_CONFIG_PATH, "Engine.ini")
+        
+        self.ds_config = DedicatedServerConfig.ensure_config(ds_config_path, self.launcher.config.OverwritePublicIP)
+        self.engine_config = EngineConfig.ensure_config(engine_config_path, self.launcher.config.DisableEncryption)
+        
+        # RCON
+        self.rcon = AstroRCON(self.ds_config.ConsolePort, self.ds_config.ConsolePassword)
+        self.process = None
+        
+        # Status of the Dedicated Server
+        self.status = ServerStatus.OFF
+    
+    # Server process management methods
+    
+    def start(self):
+        """ Start the server process and set the status to RUNNING """
+        
+        cmd = [self.wine_exec, path.join(self.astro_path, "AstroServer.exe"), "-log"]
+        env = os.environ.copy()
+        env["WINEPREFIX"] = self.wine_pfx
+        
+        self.process = subprocess.Popen(cmd, env=env, cwd=self.astro_path)
+        self.status = ServerStatus.STARTING
+    
+    def kill(self):
+        """ Kill the Dedicated Server process using wineserver -k """
+        
+        cmd = [self.wineserver_exec, "-k", "-w"]
+        env = os.environ.copy()
+        env["WINEPREFIX"] = self.wine_pfx
+        
+        process = subprocess.Popen(cmd, env=env)
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            logging.warning("Server took longer than 15 seconds to kill, killing wineserver")
+            process.kill()
+        
+        self.status = ServerStatus.OFF
+    
+    # Server interaction methods (RCON)
+    
+    def get_player_info(self, name=None, guid=None):
+        """ Get the PlayerInfo object related to the player whose name or GUID match """
+        
+        if (name is None) and (guid is None):
+            raise ValueError("One of name, guid has to be provided")
+        
+        if not self.curr_player_list:
+            return None
+        
+        for player_info in self.curr_player_list.playerInfo:
+            if ((name and player_info.playerName == name)
+                or (guid and player_info.playerGuid == guid)):
+                return player_info
+    
+    def shutdown(self):
+        """
+            Shut down the dedicated server by sending it the DSServerShutdown command.
+            Also clears the current server information and sets the status to STOPPING.
+        """
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        res = self.rcon.DSServerShutdown()
+        
+        if res == True:
+            self.curr_server_stat = None
+            self.curr_player_list = None
+            self.curr_game_list = None
+        
+            self.status = ServerStatus.STOPPING
+        
+            return True
+        else:
+            return False
+
+    def set_player_category(self, category, name=None, guid=None, force=False):
+        """
+            Sets the category of the player identified by either the name or guid.
+            
+            Arguments:
+                - category: A rcon.PlayerCategory to set
+                - name/guid: Name/GUID to identify the Player
+                - force: Wether to send the command without checking the player list first.
+                    Only works, if {name} is set
+
+            Returns: A boolean indicating the success
+        """
+        
+        if (name is None) and (guid is None):
+            raise ValueError("One of name, guid has to be provided")
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        if force:
+            if name is None:
+                raise ValueError("force=True can only be used if a name is given")
+            
+            res = self.rcon.DSSetPlayerCategoryForPlayerName(name, category)
+        else:
+            player_info = self.get_player_info(name=name, guid=guid)
+            
+            if player_info is None:
+                return False
+            
+            res = self.rcon.DSSetPlayerCategoryForPlayerName(player_info.playerName, category)
+        
+        if not isinstance(res, dict):
+            return False
+        
+        return res["status"]
+    
+    def set_whitelist_enabled(self, enabled=True):
+        """
+            Changes the enables state of the Whitelist
+            
+            Arguments:
+                - enabled: Wether to enable/disable the whitelist
+            
+            Returns: A boolean indicating the success
+        """
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        if self.curr_server_stat and (self.curr_server_stat.isEnforcingWhitelist == enabled):
+            return True
+        
+        res = self.rcon.DSSetDenyUnlisted(enabled)
+        
+        if not isinstance(res, bytes):
+            return False
+        
+        res = res.decode()
+        return res[:67] == "UAstroServerCommExecutor::DSSetDenyUnlisted: SetDenyUnlistedPlayers" and res[-1:] == "1"
+    
+    def kick_player(self, guid=None, name=None, force=False):
+        """
+            Kicks the player identified by name/guid.
+            
+            Arguments:
+                - name/guid: Name/GUID to identify the Player
+                - force: Wether to send the command without checking the player list first.
+                    Only works, if {guid} is set
+            
+            Returns: A boolean indicating the success
+        """
+        
+        if (name is None) and (guid is None):
+            raise ValueError("One of name, guid has to be provided")
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        if force:
+            if guid is None:
+                raise ValueError("force=True can only be used if a guid is given")
+            
+            res = self.rcon.DSKickPlayerGuid(guid)
+        else:
+            player_info = self.get_player_info(name=name, guid=guid)
+            
+            if player_info is None:
+                return False
+            
+            res = self.rcon.DSKickPlayerGuid(player_info.playerGuid)
+        
+        if not isinstance(res, bytes):
+            return False
+        
+        res = res.decode()
+        return res[:42] == "UAstroServerCommExecutor::DSKickPlayerGuid" and res[-1:] == "d"
+    
+    def update_server_info(self):
+        """
+            Updates the stored information about the dedicated server
+            
+            Returns: A boolean indicating the success
+        """
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        res = self.rcon.DSServerStatistics()
+        
+        if not isinstance(res, dict):
+            return False
+        
+        self.curr_server_stat = ServerStatistics.from_dict(res)
+        
+        res = self.rcon.DSListPlayers()
+        
+        if not isinstance(res, dict):
+            return False
+        
+        self.curr_player_list = PlayerList.from_dict(res)
+        
+        res = self.rcon.DSListGames()
+        
+        if not isinstance(res, dict):
+            return False
+        
+        self.curr_game_list = GameList.from_dict(res)
+        
+        return True
+    
+    def save_game(self, name=None):
+        """
+            Saves the game instantly.
+            
+            Arguments:
+                - [name]: Filename to save the current savegame as
+            
+            Returns: A boolean indicating the success
+        """
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        res = self.rcon.DSSaveGame(name)
+        
+        return res == True
+    
+    def load_game(self, save_name, force=False):
+        """
+            Loads the savegame specified in {save_game}.
+            
+            Arguments:
+                - save_name: Name of the savegame to load
+                - [force]: Wether to send the command without checking the current saves list first
+            
+            Returns: A boolean indicating the success
+        """
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        # If force is false, check that {save_name} is actually in the save game list
+        if not force:
+            if self.curr_game_list is None:
+                raise TypeError("The current game list is None")
+            
+            found = False
+            
+            for game in self.curr_game_list.gameList:
+                if game.name == save_name:
+                    found = True
+            
+            if not found:
+                return False
+        
+        if not pathvalidate.is_valid_filename(save_name):
+            raise ValueError(f"'{save_name}' is not a valid savegame name")
+        
+        res = self.rcon.DSLoadGame(save_name)
+        
+        if not res:
+            return False
+        
+        # Wait until the save is loaded (is the active save)
+        active_save_name = None
+        
+        tries = 0   # Maximum of 15 tries
+        
+        while (active_save_name != save_name) and (tries < 15):
+            res = self.rcon.DSListGames()
+            
+            if not isinstance(res, dict):
+                return False
+            
+            active_save_name = res["activeSaveName"]
+            tries += 1
+            time.sleep(0.01)
+        
+        return True
+    
+    def new_game(self):
+        """
+            Starts a new savegame.
+            
+            WARNING: Currently crashes the server running under wine
+            
+            Returns: A boolean indicating the success
+        """
+        
+        # Prevent people from using this
+        logging.warning("Starting a new save game has been disables currently due to the dedicated server crashing under wine while performing the operation")
+        logging.warning("Please create new games from inside the game")
+        return False
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        res1 = self.rcon.DSNewGame(name)
+        res2 = self.rcon.DSSaveGame(name)
+        
+        return (res1 == True) && (res2 == True)
