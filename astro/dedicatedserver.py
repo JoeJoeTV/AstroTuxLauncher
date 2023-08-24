@@ -681,4 +681,4 @@ class AstroDedicatedServer:
         res1 = self.rcon.DSNewGame(name)
         res2 = self.rcon.DSSaveGame(name)
         
-        return (res1 == True) && (res2 == True)
+        return (res1 == True) and (res2 == True)
