@@ -18,6 +18,8 @@ from datetime import datetime
 import subprocess
 import pathvalidate
 import time
+import astro.playfab as playfab
+from utils.interface import EventType, ConsoleParser
 
 #
 #   Configuration
@@ -391,20 +393,347 @@ class AstroDedicatedServer:
         self.rcon = AstroRCON(self.ds_config.ConsolePort, self.ds_config.ConsolePassword)
         self.process = None
         
+        # XAuth for playfab API
+        self.curr_xauth = None
+        self.time_last_xauth = None
+        
         # Status of the Dedicated Server
         self.status = ServerStatus.OFF
+        
+        # Information about Playfab registration
+        self.registered = False
+        self.lobby_id = None
+    
+    def reload_ds_config(self):
+        """ Reads the configuration file for the Dedicated Server again """
+        
+        ds_config_path = path.join(self.astro_path, ASTRO_DS_CONFIG_PATH, "AstroServerSettings.ini")
+        self.ds_config = DedicatedServerConfig.ensure_config(ds_config_path, self.launcher.config.OverwritePublicIP)
+    
+    def server_loop(self):
+        """
+            Loop to run while dedicated server is running that receives/sends data, executes commands and more
+        """
+        
+        while True:
+            # Exit loop, if server is off
+            if self.status == ServerStatus.OFF:
+                break
+            
+            # If RCON is not connected, try to connect
+            if not self.rcon.connected:
+                conn = self.rcon.ensureConnection()
+                
+                # After connecting, toggle whiltelist quickly
+                if conn:
+                    self.quick_toggle_whitelist()
+                else:
+                    logging.debug("Failed to connect RCON")
+            
+            # Check server process status
+            proc_status = self.process.poll()
+            if proc_status is not None:
+                if self.status == ServerStatus.STOPPING and proc_status == 0:
+                    logging.info("Dedicated Server shut down gracefully")
+                    break
+                
+                # Server process has exited
+                logging.debug(f"Server process closed with exit code {proc_status}")
+                break
+            
+            # Ensure XAuth is present
+            self.get_XAuth()
+            
+            #TODO: Get info from Playfab API
+            
+            # Save player list before updating
+            prev_online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
+            prev_online_player_guids = [pi.playerGuid for pi in prev_online_players]
+            
+            prev_active_save_name = self.curr_game_list.activeSaveName
+            if (prev_active_save_name is not None) and (prev_active_save_name != ""):
+                prev_active_save_time = [gi.date for gi in self.curr_game_list.gameList if gi.name == prev_active_save_name][0]
+            else:
+                prev_active_save_time = 0
+            
+            logging.debug(f"Prev Active SaveGame Name: {prev_active_save_name}")
+            logging.debug(f"Prev Active SaveGame Time: {prev_active_save_time}")
+            
+            # Get information from server via RCON
+            if self.rcon.connected and self.update_server_info():
+                # Current player list
+                online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
+                online_player_guids = [pi.playerGuid for pi in online_players]
+                
+                # If the amount of players now is greater than before the update, players have joined
+                if len(online_players) > len(prev_online_players):
+                    # Get difference of Player GUIDs to find out, who joined
+                    player_diff_guid = list(set(online_player_guids) - set(prev_online_player_guids))
+                    
+                    logging.debug(f"Joined GUIDs: {player_diff_guid}")
+                    
+                    # Maybe redundant check
+                    if len(player_diff) > 0:
+                        player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
+                        
+                        logging.debug(f"Joined Infos: {player_diff}")
+                        
+                        for info in player_diff:
+                            self.launcher.notifications.send_event(EventType.PLAYER_JOIN, player_name=info["name"], player_guid=info["guid"])
+                            
+                            #TODO: Maybe set players to pending with command and refresh config file
+                
+                # If the amount of players now is smaller than before the update, players have left
+                if len(prev_online_players) > len(online_players):
+                    # Get difference of Player GUIDs to find out, who left
+                    player_diff_guid = list(set(prev_online_player_guids) - set(online_player_guids))
+                    
+                    logging.debug(f"Left GUIDs: {player_diff_guid}")
+                    
+                    # Maybe redundant check
+                    if len(player_diff) > 0:
+                        player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
+                        
+                        logging.debug(f"Left Infos: {player_diff}")
+                        
+                        for info in player_diff:
+                            self.launcher.notifications.send_event(EventType.PLAYER_LEAVE, player_name=info["name"], player_guid=info["guid"])
+                
+                # Get current savegame information
+                active_save_name = self.curr_game_list.activeSaveName
+                if (active_save_name is not None) and (active_save_name != ""):
+                    active_save_time = [gi.date for gi in self.curr_game_list.gameList if gi.name == active_save_name][0]
+                else:
+                    active_save_time = 0
+                
+                logging.debug(f"Active SaveGame Name: {active_save_name}")
+                logging.debug(f"Active SaveGame Time: {active_save_time}")
+                
+                # If active save names are different, the server changed savegame
+                if active_save_name != prev_active_save_name:
+                    self.launcher.notifications.send_event(EventType.SAVEGAME_CHANGE, savegame_name=active_save_name)
+                else:
+                    # If save was not changed, check if server saved the game
+                    if active_save_time != prev_active_save_time:
+                        self.launcher.send_event(EventType.SAVE, savegame_name=active_save_name)
+            
+            # Handle console commands
+            while not self.launcher.cmd_queue.empty():
+                # break out of loop, if RCON not available
+                if not self.rcon.connected:
+                    logging.debug("Can't execute command, because RCON is not connected")
+                    break
+                
+                args = self.launcher.cmd_queue.get()
+                
+                self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"])
+                
+                
+                #TODO: Change functions in server such that they return a boolean AND a message, which makes logging easier
+                
+                
+                try:
+                    if args["cmd"] == ConsoleParser.Command.SHUTDOWN:
+                        success = self.shutdown()
+                        
+                        if not success:
+                            logging.warning("There was a problem while shutting down the dedicated server")
+                        
+                    elif args["cmd"] == ConsoleParser.Command.RESTART:
+                        #TODO: IMPLEMENT
+                        logging.warning("The restart command is not implemented yet")
+                        
+                    elif args["cmd"] == ConsoleParser.Command.INFO:
+                        if self.curr_server_stat is not None:
+                            logging.info("Information about the Dedicated Server:")
+                            logging.info(f"    - Build: {self.curr_server_stat.build}")
+                            logging.info(f"    - Server URL: {self.curr_server_stat.serverURL}")
+                            logging.info(f"    - Owner: {self.curr_server_stat.ownerName}")
+                            logging.info(f"    - Has Password: {'yes' if self.curr_server_stat.hasServerPassword else 'no'}")
+                            logging.info(f"    - Whitelist: {'enabled' if self.curr_server_stat.isEnforcingWhitelist else 'disabled'}")
+                            logging.info(f"    - Creative Mode: {'yes' if self.curr_server_stat.creativeMode else 'no'}")
+                            logging.info(f"    - Save Game: {self.curr_server_stat.saveGameName}")
+                            logging.info(f"    - Players: {len(self.curr_player_list.playerInfo)}/{self.curr_server_stat.maxInGamePlayers}")
+                            logging.info(f"    - Average FPS: {self.curr_server_stat.averageFPS}")
+                        else:
+                            logging.info("Server information not available right now")
+
+                    elif args["cmd"] == ConsoleParser.Command.KICK:
+                        self.kick_player(name=args["player"], guid=args["player"])
+
+                    elif args["cmd"] == ConsoleParser.Command.WHITELIST:
+                        if args["subcmd"] == ConsoleParser.WhitelistSubcommand.ENABLE:
+                            success = self.set_whitelist_enabled(True)
+                            
+                            if success:
+                                logging.info("Successfully enabled whitelist")
+                        elif args["subcmd"] == ConsoleParser.WhitelistSubcommand.DISABLE:
+                            success = self.set_whitelist_enabled(False)
+                            
+                            if success:
+                                logging.info("Successfully disabled whitelist")
+                        elif args["subcmd"] == ConsoleParser.WhitelistSubcommand.STATUS:
+                            logging.info(f"The whitelist is currently {'enabled' if self.curr_server_stat.isEnforcingWhitelist else 'disabled'}")
+                        
+                        if not success:
+                            logging.warning("There was a problem while setting the whitelist status")
+
+                    elif args["cmd"] == ConsoleParser.Command.LIST:
+                        if self.curr_player_list is not None:
+                            if args["category"] == ConsoleParser.ListCategory.ALL:
+                                category = None
+                            else:
+                                category = PlayerCategory[args["category"].name]
+                            
+                            logging.info("Online Players:")
+                            
+                            for pi in self.curr_player_list.playerInfo:
+                                if pi.inGame and ((category is None) or (category == pi.playerCategory)):
+                                    logging.info(f"    - {pi.playerName}({pi.playerGuid})")
+                        else:
+                            logging.info("Player information not available right now")
+
+                    elif args["cmd"] == ConsoleParser.Command.SAVEGAME:
+                        if args["subcmd"] == ConsoleParser.SaveGameSubcommand.LOAD:
+                            try:
+                                success = self.load_game(args["save_name"])
+                            except Exception as e:
+                                logging.error(f"Error while executing command: {str(e)}")
+                            
+                            if success:
+                                logging.info(f"Successfully loaded {args['save_name']}")
+                            else:
+                                logging.warning("There was a problem while executing the command")
+                        if args["subcmd"] == ConsoleParser.SaveGameSubcommand.SAVE:
+                            try:
+                                success = self.save_game(args["save_name"])
+                            except Exception as e:
+                                logging.error(f"Error while executing command: {str(e)}")
+                                
+                            if success:
+                                logging.info("Successfully saved the game")
+                            else:
+                                logging.warning("There was a problem while executing the command")
+                        if args["subcmd"] == ConsoleParser.SaveGameSubcommand.NEW:
+                            try:
+                                success = self.new_game(args["save_name"])
+                            except Exception as e:
+                                logging.error(f"Error while executing command: {str(e)}")
+                                
+                            if success:
+                                logging.info("Successfully created a new save game")
+                            else:
+                                logging.warning("There was a problem while executing the command")
+                        if args["subcmd"] == ConsoleParser.SaveGameSubcommand.LIST:
+                            if self.curr_game_list is not None:
+                                
+                                logging.info("Savegames:")
+                                
+                                for gi in self.curr_game_list.gameList:
+                                    logging.info(f"    - {gi.name} [{gi.data}]  Creative: {gi.bHasBeenFlaggedAsCreativeModeSave}")
+                            else:
+                                logging.info("Savegame information not available right now")
+                except Exception as e:
+                    logging.error(f"Error occured while executing command: {str(e)}")
+            
+            time.sleep(self.launcher.config.ServerStatusInterval)
     
     # Server process management methods
     
     def start(self):
+        """
+            Start the dedicated server process and wait for it to be registered to playfab
+        """
+        
+        #TODO: Check in launcher calling this function for exception and exit
+        
+        ip_port_combo = f"{self.ds_config.PublicIP}:{self.engine_config.Port}"
+        
+        # Ensure XAuth is present  
+        self.get_XAuth()
+        
+        # Deregister all still with playfab registered servers to avoid issues
+        old_lobbyIDs = self.deregister_all_servers()
+        
+        logging.debug("Starting Server process...")
+        start_time = time.time()
+        try:
+            self.start_process()
+        except:
+            logging.error("Could not start Dedicated Server process")
+            return False
+        
+        # If process has exited immediately, something went wrong
+        if self.process.poll() is not None:
+            logging.error("Dedicated Server process died immediately")
+            return False
+        
+        self.status = ServerStatus.STARTING
+        
+        logging.debug("Started Dedicated Server process. Waiting for registration...")
+        
+        wait_time = self.launcher.config.PlayfabAPIInterval
+        
+        # Wait for DS to finish registration
+        while not self.registered:
+            try:
+                response = playfab.get_server(ip_port_combo, self.curr_xauth)
+                
+                if response["status"] != "OK":
+                    continue
+                
+                registered_servers = response["data"]["Games"]
+                
+                lobbyIDs = [srv["LobbyID"] for srv in registered_servers]
+                
+                # If the set of lobbyIDs without the old ones is empty, the server hasn't registered yet
+                if len(set(lobbyIDs) - set(old_lobbyIDs)) == 0:
+                    time.sleep(self.launcher.config.PlayfabAPIInterval)
+                else:
+                    now = time.time()
+                    
+                    # Only mark server as registered, if passed time is greater thanb 15 secords (kept from AstroLauncher)
+                    if (now - start_time) > 15:
+                        self.registered = True
+                        self.lobby_id = registered_servers[0]["LobbyID"]
+                
+                if self.process.poll() is not None:
+                    logging.error("Server was closed before registration")
+                    return False
+            except:
+                # kept from AstroLauncher
+                logging.debug("Checking for registration failed. Probably radte limit, Backing off and trying again...")
+                
+                # If Playfab API wait time is below 30 seconds, increase it by one
+                if self.launcher.config.PlayfabAPIInterval < 30:
+                    self.launcher.config.PlayfabAPIInterval += 1
+                
+                time.sleep(self.launcher.config.PlayfabAPIInterval)
+        
+        self.launcher.config.PlayfabAPIInterval = wait_time
+        
+        done_time = time.time()
+        elapsed = start_time - wait_time
+        
+        logging.info(f"Dedicated Server ready! Took {round(elapsed, 2)} seconds to register")
+        
+        self.status = ServerStatus.RUNNING
+        
+        self.launcher.notifications.send_event(EventType.START)
+        
+        return True
+    
+    def start_process(self):
         """ Start the server process and set the status to RUNNING """
+        
+        logging.debug("Starting Dedicated Server process...")
         
         cmd = [self.wine_exec, path.join(self.astro_path, "AstroServer.exe"), "-log"]
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
         self.process = subprocess.Popen(cmd, env=env, cwd=self.astro_path)
-        self.status = ServerStatus.STARTING
+        time.sleep(0.01)
     
     def kill(self):
         """ Kill the Dedicated Server process using wineserver -k """
@@ -519,7 +848,11 @@ class AstroDedicatedServer:
             return False
         
         res = res.decode()
-        return res[:67] == "UAstroServerCommExecutor::DSSetDenyUnlisted: SetDenyUnlistedPlayers" and res[-1:] == "1"
+        if res[:67] == "UAstroServerCommExecutor::DSSetDenyUnlisted: SetDenyUnlistedPlayers" and res[-1:] == "1":
+            self.curr_server_stat.isEnforcingWhitelist = enabled
+            return True
+        else:
+            return False
     
     def kick_player(self, guid=None, name=None, force=False):
         """
@@ -548,15 +881,27 @@ class AstroDedicatedServer:
             player_info = self.get_player_info(name=name, guid=guid)
             
             if player_info is None:
+                logging.warning("Unknown Player")
                 return False
             
             res = self.rcon.DSKickPlayerGuid(player_info.playerGuid)
         
         if not isinstance(res, bytes):
+            logging.warning("Error while executing command")
             return False
         
         res = res.decode()
-        return res[:42] == "UAstroServerCommExecutor::DSKickPlayerGuid" and res[-1:] == "d"
+        success = res[:42] == "UAstroServerCommExecutor::DSKickPlayerGuid" and res[-1:] == "d"
+        
+        if success:
+            if force:
+                logging.info(f"Kicked Player with GUID '{guid}'")
+            else:
+                logging.info(f"Kicked Player '{player_info.playerName}'")
+                
+            return True
+        else:
+            return success
     
     def update_server_info(self):
         """
@@ -671,7 +1016,7 @@ class AstroDedicatedServer:
         """
         
         # Prevent people from using this
-        logging.warning("Starting a new save game has been disables currently due to the dedicated server crashing under wine while performing the operation")
+        logging.warning("Starting a new save game has been disabled currently due to the dedicated server crashing under wine while performing the operation")
         logging.warning("Please create new games from inside the game")
         return False
         
@@ -682,3 +1027,90 @@ class AstroDedicatedServer:
         res2 = self.rcon.DSSaveGame(name)
         
         return (res1 == True) and (res2 == True)
+    
+    # Utility functions
+    
+    def quick_toggle_whitelist(self):
+        """
+            Quickly toggle the whitelist status two times, which forces the server to put every player who hast joined the current save into the INI file
+        """
+        
+        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+            return False
+        
+        if not self.curr_server_stat:
+            return False
+        
+        wl_status = self.curr_server_stat.isEnforcingWhitelist
+        
+        self.set_whitelist_enabled(not wl_status)
+        self.set_whitelist_enabled(wl_status)
+        self.reload_ds_config()
+        
+        return True
+    
+    def get_XAuth(self):
+        # If no XAuth has been requested yet, or the last one is over an hour old, try to get new XAuth
+        if (self.time_last_xauth is None) or ((datetime.now() - self.time_last_xauth).total_seconds() > 3600):
+            XAuth = None
+            tries = 5
+            
+            # While getting XAuth wasn't successful, retry
+            while XAuth is None:
+                if tries <= 0:
+                    logging.error("Unable to get XAuth token after aeveral tries.  Are you connected to the internet?")
+                    raise TimeoutError("Gave up after several tries while generating XAuth token")
+                
+                try:
+                    logging.debug("Generating new XAuth...")
+                    XAuth = playfab.generate_XAuth(self.ds_config.ServerGuid)
+                except Exception as e:
+                    logging.debug("Error while generating XAuth: " + str(e))
+                    
+                    # If not successful, wait 10 seconds
+                    time.sleep(10)
+            
+            self.curr_xauth = XAuth
+            self.time_last_xauth = datetime.now()
+    
+    def deregister_all_servers(self):
+        """
+            Tries to deregister all servers registered with Playfab with matching IP-Port-combination.
+            
+            Returns: List of LobbyIDs of deregistered servers
+        """
+        
+        if not self.curr_xauth:
+            raise ValueError("Not XAuth present, can't use Playfab API")
+        
+        # Combination of PublicIP and Port is used as game ID, so we need to get it
+        ip_port_combo = f"{self.ds_config.PublicIP}:{self.engine_config.Port}"
+        
+        # Get registered servers from Playfab API
+        response = playfab.get_server(ip_port_combo, self.curr_xauth)
+        
+        # If API set status to anything other than OK, we can't continue and simply return
+        if response["status"] != "OK":
+            raise playfab.APIError("API responded with non-OK status")
+        
+        registered_servers = response["data"]["Games"]
+        
+        if len(registered_servers) > 0:
+            logging.debug(f"Trying to deregister {len(registered_servers)} servers with maching IP-Port-combination from Playfab...")
+            
+            for i, srv in enumerate(registered_servers):
+                logging.debug(f"Deregistering server {i}")
+                
+                response = playfab.deregister_server(srv["LobbyID"], self.curr_xauth)
+                
+                if ("status" in response) and (response["status"] != "OK"):
+                    logging.warning(f"Problems while deregistering server {i}. It may still be registered!")
+            
+            logging.debug("Finished deregistration")
+            
+            # AstroLauncher has this for some reason
+            time.sleep(1)
+            
+            return [srv["LobbyID"] for srv in registered_servers]
+        
+        return []
