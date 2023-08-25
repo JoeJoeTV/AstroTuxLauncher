@@ -12,8 +12,12 @@ import subprocess
 import time
 import logging
 from utils.interface import run_proc_with_logging, safeformat
+from alive_progress import alive_bar
+from alive_progress.animations.spinners import frame_spinner_factory
 
 DEPOTDL_LATEST_ZIP_URL="https://github.com/SteamRE/DepotDownloader/releases/latest/download/DepotDownloader-linux-x64.zip"
+
+DOTS_SPINNER = frame_spinner_factory("⣷⣯⣟⡿⢿⣻⣽⣾")
 
 def reporthook(blocks_done, block_size, file_size):
     size_trans = blocks_done * block_size
@@ -32,19 +36,30 @@ class FileDownloader:
         self.msg_format = msg_format
         self.log_level = log_level
         self.percent_mod = percent_mod
+        self.alive_bar = None
         
         self._prev_percentage = -1
     
     def _reporthook(self, blocks_done, block_size, file_size):
         size_trans = blocks_done * block_size
-        percentage = round((size_trans / file_size) * 100)
-        percentage = (percentage // self.percent_mod) * self.percent_mod
+        fraction = (size_trans / file_size)
+        
+        # If an alive-progressbar was passed, update it with percentage
+        if self.alive_bar:
+            self.alive_bar(min(fraction, 1))
+        
+        percentage = (round(fraction * 100) // self.percent_mod) * self.percent_mod
+        
+        if percentage > 100:
+            logging.debug(f"Download percentage overshoot: {percentage}%")
         
         if percentage != self._prev_percentage:
             logging.log(self.log_level, safeformat(self.msg_format, percentage=percentage))
             self._prev_percentage = percentage
     
-    def download(self):
+    def download(self, alive_bar=None):
+        self.alive_bar = alive_bar
+        
         if self.filename:
             file_path, http_msg = request.urlretrieve(self.url, filename=self.filename, reporthook=self._reporthook)
         else:
@@ -62,7 +77,9 @@ def dl_depotdownloader(dest_dir, execname="depotdownloader"):
     with tempfile.TemporaryDirectory() as tmpdir:
         # Download DepotDownloader release zip and save it in temporary directory
         dl = FileDownloader(DEPOTDL_LATEST_ZIP_URL, filename=path.join(tmpdir, "depotdl.zip"), log_level=logging.DEBUG, percent_mod=5)
-        zip_path, _ = dl.download()
+        
+        with alive_bar(title="Downloading DepotDownloader", spinner=DOTS_SPINNER, bar="smooth", manual=True, receipt=True, enrich_print=False) as bar:
+            zip_path, _ = dl.download(bar)
         
         # Extract zip file into tmp dir
         with zipfile.ZipFile(zip_path, "r") as zf:
@@ -101,7 +118,8 @@ def update_app(exec_path, app, os, directory):
     cmd_args = [str(exec_path), "-app", str(app), "-os", str(os), "-dir", path.abspath(directory), "-validate"]
     
     # Run update command, log output and wait until it is finished
-    proc_res = run_proc_with_logging(cmd_args, "DepotDL", level=logging.DEBUG)
+    with alive_bar(title=f"Updating app {app}", spinner=DOTS_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False) as bar:
+        proc_res = run_proc_with_logging(cmd_args, "DepotDL", level=logging.DEBUG, alive_bar=bar)
     
     # Return boolean based on update process exit code
     return (proc_res == 0)

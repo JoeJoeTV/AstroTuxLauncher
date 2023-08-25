@@ -673,7 +673,7 @@ class NTFYNotificationHandler(QueuedNotificationHandler):
 
 PROC_FORMAT="[{name}] {message}"
 
-def run_proc_with_logging(args, name, format=PROC_FORMAT, sleep_time=0.1, level=logging.INFO, **popen_args):
+def run_proc_with_logging(args, name, format=PROC_FORMAT, sleep_time=0.05, level=logging.INFO, alive_bar=None, **popen_args):
     """ Runs a process and outputs its output using the logging module and waits for it to finish """
     
     # Create process with piped stdout/stderr
@@ -703,6 +703,9 @@ def run_proc_with_logging(args, name, format=PROC_FORMAT, sleep_time=0.1, level=
         else:
             line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
             logging.log(level, safeformat(format, name=name, message=line))
+        
+        if alive_bar:
+            alive_bar()
         
         time.sleep(sleep_time)
     
