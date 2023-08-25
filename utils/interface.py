@@ -162,8 +162,8 @@ class ConsoleParser:
     
     class ListCategory(Enum):
         ALL = "all"
-        WHITELIST = "whitelist"
-        BLACKLIST = "blacklist"
+        WHITELISTED = "whitelisted"
+        BLACKLISTED = "blacklisted"
         UNLISTED = "unlisted"
         ADMIN = "admin"
         OWNER = "owner"
@@ -224,7 +224,7 @@ class ConsoleParser:
         self.subparsers["savegame.save"].add_argument("save_name", type=str, nargs="?", help="The name to save the savegame as")
         
         self.subparsers["savegame.new"] = savegame_section.add_parser(ConsoleParser.SaveGameSubcommand.NEW, add_help=False, exit_on_error=False, help="Create a new save and set it as active", description="Create a new save and set it as active")
-        self.subparsers["savegame.new"].add_argument("save_name", type=str, help="The name of the new save to create")
+        self.subparsers["savegame.new"].add_argument("save_name", type=str, nargs="?",help="The name of the new save to create")
         
         self.subparsers["savegame.list"] = savegame_section.add_parser(ConsoleParser.SaveGameSubcommand.LIST, add_help=False, exit_on_error=False, help="List all the available savegames and marks the active one", description="List all the available savegames and marks the active one")
     
@@ -297,6 +297,9 @@ class ConsoleParser:
             
             return (True, {"cmd": args["cmd"], "message": msg}) if success else (False, msg)
         else:
+            # Add full command line to args for later use in messages
+            args["cmdline"] = " ".join(input_args)
+            
             return True, args
 
 
@@ -474,6 +477,8 @@ class EventType(Enum):
     PLAYER_JOIN = "player_join"
     PLAYER_LEAVE = "player_leave"
     COMMAND = "command"
+    SAVE = "save"
+    SAVEGAME_CHANGE = "savegame_change"
 
 class NotificationManager:
     """ Class that keeps multiple Notification Handlers and broadcasts messages to all of them """
@@ -508,14 +513,16 @@ def safeformat(str, **kwargs):
     return str.format_map(replacements)
 
 DEFAULT_EVENT_FORMATS = {
-        EventType.MESSAGE       : "{message}",
-        EventType.START         : "Server started!",
-        EventType.REGISTERED    : "Server registered with Playfab!",
-        EventType.SHUTDOWN      : "Server shutdown!",
-        EventType.CRASH         : "Server crashed!",
-        EventType.PLAYER_JOIN   : "Player '{player}' joined the game",
-        EventType.PLAYER_LEAVE  : "Player '{player}' left the game",
-        EventType.COMMAND       : "Command executed: {command}"
+        EventType.MESSAGE           : "{message}",
+        EventType.START             : "Server started!",
+        EventType.REGISTERED        : "Server registered with Playfab!",
+        EventType.SHUTDOWN          : "Server shutdown!",
+        EventType.CRASH             : "Server crashed!",
+        EventType.PLAYER_JOIN       : "Player '{player_name}'({player_guid}) joined the game",
+        EventType.PLAYER_LEAVE      : "Player '{player_name}'({player_guid}) left the game",
+        EventType.COMMAND           : "Command executed: {command}",
+        EventType.SAVE              : "Game saved!",
+        EventType.SAVEGAME_CHANGE   : "Savegame changed to '{savegame_name}'"
     }
 
 
@@ -609,14 +616,16 @@ class QueuedNotificationHandler(NotificationHandler):
         print(message)
 
 DEFAULT_LEVEL_MAPPING = {
-        EventType.MESSAGE       : logging.INFO,
-        EventType.START         : logging.INFO,
-        EventType.REGISTERED    : logging.INFO,
-        EventType.SHUTDOWN      : logging.INFO,
-        EventType.CRASH         : logging.WARNING,
-        EventType.PLAYER_JOIN   : logging.INFO,
-        EventType.PLAYER_LEAVE  : logging.INFO,
-        EventType.COMMAND       : logging.INFO
+        EventType.MESSAGE           : logging.INFO,
+        EventType.START             : logging.INFO,
+        EventType.REGISTERED        : logging.INFO,
+        EventType.SHUTDOWN          : logging.INFO,
+        EventType.CRASH             : logging.WARNING,
+        EventType.PLAYER_JOIN       : logging.INFO,
+        EventType.PLAYER_LEAVE      : logging.INFO,
+        EventType.COMMAND           : logging.INFO,
+        EventType.SAVE              : logging.INFO,
+        EventType.SAVEGAME_CHANGE   : logging.INFO
     }
 
 class LoggingNotificationHandler(NotificationHandler):

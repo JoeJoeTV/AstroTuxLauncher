@@ -109,6 +109,8 @@ class LauncherConfig:
     WinePrefixPath: str = "winepfx"             # The path, where the Wine prefix should be stored
     LogPath: str = "logs"                       # The path where logs should be saved
     
+    PlayfabAPIInterval: int = 2                 # Time to wait between Playfab API requests
+    ServerStatusInterval: int = 2               # Time to wait between Server Status checks
     
     DisableEncryption: bool = True  # Wether to disable encryption for the Astroneer DS. CURRENTLY REQUIRED TO BE "True" FOR HOSTING ON LINUX
         
@@ -255,7 +257,7 @@ class AstroTuxLauncher():
         else:
             # If an error occured, {result} is just a message, so log it to console
             # We send event for command first, when it's processed
-            logging.error(result)
+            logging.warning(result)
 
     def update_server(self):
         """
@@ -366,4 +368,6 @@ if __name__ == "__main__":
             #TODO: Finish
             pass
     except KeyboardInterrupt:
+        #TODO: Move this to signal handler
+        
         launcher.exit(reason="CTRL + C pressed")

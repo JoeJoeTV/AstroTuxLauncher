@@ -20,6 +20,12 @@ base_headers = {
     "User-Agent": "Astro/++UE4+Release-4.23-CL-0 Windows/10.0.19042.1.256.64bit"
 }
 
+class APIError(Exception):
+    
+    def __init__(self, message="A Playfab API error occured"):
+        self.message = message
+        super().__init__(self.message)
+
 def generate_XAuth(serverGUID):
     """
         Generates an X-Authorization token to use for further communication with Playfab
