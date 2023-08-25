@@ -20,6 +20,7 @@ import pathvalidate
 import time
 import astro.playfab as playfab
 from utils.interface import EventType, ConsoleParser
+import psutil
 
 #
 #   Configuration
@@ -637,6 +638,9 @@ class AstroDedicatedServer:
                     logging.error(f"Error occured while executing command: {str(e)}")
             
             time.sleep(self.launcher.config.ServerStatusInterval)
+        
+        # Kill remaining wine processes
+        self.kill()
     
     # Server process management methods
     
@@ -1114,3 +1118,27 @@ class AstroDedicatedServer:
             return [srv["LobbyID"] for srv in registered_servers]
         
         return []
+    
+    def check_ports_free(self):
+        
+        def is_port_in_use(port, tcp=True):
+            """ Checks if port is in use for TCP if {tcp} is true and for UDP if {tcp} is false """
+            conns = psutil.net_connections("inet")
+            matching = [c for c in conns 
+                        if c.type == (socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM)
+                        and c.laddr[1] == port]
+            
+            return len(matching) > 0
+        
+        sp_free = not is_port_in_use(self.engine_config.Port)
+        cp_free = not is_port_in_use(self.ds_config.ConsolePort)
+        
+        if not sp_free:
+            logging.error(f"Server Port ({self.engine_config.Port}) already in use by different process")
+            return False
+        
+        if not cp_free:
+            logging.error(f"Console Port ({self.ds_config.ConsolePort}) already in use by different process")
+            return False
+        
+        return True

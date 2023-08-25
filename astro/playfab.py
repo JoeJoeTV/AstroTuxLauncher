@@ -9,6 +9,7 @@ from urllib import request
 import ssl
 import time
 from utils.net import get_request, post_request
+import logging
 
 #
 #   Methods for interacting with the Playfab Astroneer API
@@ -25,6 +26,23 @@ class APIError(Exception):
     def __init__(self, message="A Playfab API error occured"):
         self.message = message
         super().__init__(self.message)
+
+def check_api_health():
+    """
+        Checks the the Playfab API is available
+        
+        Returns: A boolean value indicating if the API is available
+    """
+    
+    url = "https://5ea1.playfabapi.com/"
+    
+    try:
+        resp = json.load(get_request(url))
+        
+        return resp["Healthy"] == True
+    except Exception as e:
+        logging.debug(f"Error while checking for Playfab API health: {str(e)}")
+        return False
 
 def generate_XAuth(serverGUID):
     """

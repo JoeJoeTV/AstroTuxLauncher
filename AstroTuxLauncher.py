@@ -21,6 +21,10 @@ import shutil
 from utils import steam
 from utils.requests import get_request
 from packaging import version
+import astro.playfab as playfab
+from astro.dedicatedserver import AstroDedicatedServer, ServerStatus
+import utils.net as net
+import signal
 
 
 """
@@ -233,6 +237,10 @@ class AstroTuxLauncher():
         
         self.notifications.add_handler(interface.LoggingNotificationHandler())
         #TODO: Initialize Webhook handlers
+        
+        # Create Dedicated Server object
+        #TODO: Maybe move to stert_server
+        self.dedicatedserver = AstroDedicatedServer(self)
     
     def check_ds_executable(self):
         """ Checks is Astroneer DS executable exists and is a file """
@@ -259,6 +267,67 @@ class AstroTuxLauncher():
             # We send event for command first, when it's processed
             logging.warning(result)
 
+    def update_wine_prefix(self):
+        """
+            Creates/updated the WINE prefix
+        """
+        
+        logging.debug("Creating/updating WINE prefix...")
+        
+        cmd = [self.wine_exec, "wineboot"]
+        env = os.environ.copy()
+        del env["DISPLAY"]
+        env["WINEPREFIX"] = self.wine_pfx
+        env["WINEDEBUG"] = "-all"
+        
+        try:
+            wineprocess = subprocess.Popen(cmd, env=env, cwd=self.astro_path)
+            code = wineprocess.wait(timeout=30)
+        except TimeoutError:
+            logging.debug("Wine process took longer than 30 seconds, aborting")
+            return False
+        except Exception as e:
+            logging.error(f"Error occured during updating of wine prefix: {str(e)}")
+            return False
+        
+        return code == 0    
+    
+    def check_network_config(self):
+        if not self.dedicatedserver:
+            raise ValueError("Dedcated Server has to be created first")
+        
+        # Check if server port is reachable from local network over UDP
+        server_local_reachable = net.net_test_local(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.engine_config.Port, False)
+        
+        # Check if server post is reachable from internet over UDP
+        server_nonlocal_rechable = net.net_test_nonlocal(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.engine_config.Port)
+        
+        test_res = (server_local_reachable, server_nonlocal_rechable)
+        
+        if test_res == (True, True):
+            logging.info("Network configuration looks good")
+        elif test_res == (False, True):
+            logging.warning("The Server is not accessible from the local network")
+            logging.warning("This usually indicates an issue with NAT Loopback")
+        elif test_res == (True, False):
+            logging.warning("The server can be reached locally, but not from outside of the local network")
+            logging.warning(f"Make sure the Server Port ({self.dedicatedserver.engine_config.Port}) is forwarded for UDP traffic")
+        elif test_res == (False, False):
+            logging.warning("The Server is completely unreachable")
+            logging.warning(f"Make sure the Server Port ({self.dedicatedserver.engine_config.Port}) is forwarded for UDP traffic and check firewall settings")
+        
+        rcon_local_blocked = not net.net_test_local(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.ds_config.ConsolePort, True)
+        
+        if rcon_local_blocked:
+            logging.info("RCON network configuration looks good")
+        else:
+            logging.warning(f"SECURITY ALERT: The RCON Port ({self.dedicatedserver.ds_config.ConsolePort}) is accessible from outside")
+            logging.warning("SECURITY ALERT: This potentially allows access to the Remote Console from outside your network")
+            logging.warning("SECURITY ALERT: Disable this ASAP to prevent issues")
+            
+            # kept from AstroLauncher
+            time.sleep(5)
+    
     def update_server(self):
         """
             Installs/Updates the Astroneer Dedicated Server.
@@ -324,10 +393,55 @@ class AstroTuxLauncher():
                 logging.info("Nothing to do")
         
     def start_server(self):
-        #TODO: Finish
-        pass
+        """
+            Starts the Astroneer Dedicated Server after setting up environment
+        """
+        
+        # Check for and install DS update if wanted
+        self.check_server_update()
+        
+        # If Playfab API can't be reached, we can't continue
+        if not playfab.check_api_health():
+            logging.error("Playfab API is unavailable. Are you connected to the internet?")
+            self.exit(reason="Playfab API unavailable")
+        
+        # Make sure wine prefix is ready
+        if not self.update_wine_prefix():
+            self.exit(reason="Error while updating WINE prefix")
+        
+        # Check that ports are available for the Server and RCON
+        if not self.dedicatedserver.check_ports_free():
+            self.exit(reason="Port not available")
+        
+        # Check netowrk configuration
+        if self.config.CheckNetwork:
+            self.check_network_config()
+        
+        # Prepare and start dedicated server
+        try:
+            self.dedicatedserver.start()
+        except Exception as e:
+            logging.error(f"There as an error while starting the Dedicated Server: {str(e)}")
+            self.exit(reason="Error while starting Dedicated Server")
+        
+        # Run Server Loop
+        self.dedicatedserver.server_loop()
+        
+        logging.debug("Server loop finished")
+    
+    
+    def user_exit(self):
+        """ Callback for when user requests to exit the application """
+        self.exit(graceful=True, reason="User Requested to exit")
     
     def exit(self, graceful=False, reason=None):
+        if self.dedicatedserver and self.dedicatedserver.status == ServerStatus.RUNNING:
+            if graceful:
+                self.dedicatedserver.shutdown()
+                return
+            else:
+                self.dedicatedserver.kill()
+        
         if reason:
             logging.info(f"Quitting... (Reason: {reason})")
         else:
@@ -357,17 +471,16 @@ if __name__ == "__main__":
     
     launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec)
     
-    try:
-        if args.command == LauncherCommand.INSTALL:
-            logging.info("Installing Astroneer Dedicated Server...")
-            launcher.update_server()
-        elif args.command == LauncherCommand.UPDATE:
-            logging.info("Checking for available updates to the Astroneer Dedicated Server...")
-            launcher.check_server_update(force_update=True)
-        elif args.command == LauncherCommand.START:
-            #TODO: Finish
-            pass
-    except KeyboardInterrupt:
-        #TODO: Move this to signal handler
-        
-        launcher.exit(reason="CTRL + C pressed")
+    signal.signal(signal.SIGING, self)
+    
+    if args.command == LauncherCommand.INSTALL:
+        logging.info("Installing Astroneer Dedicated Server...")
+        launcher.update_server()
+    elif args.command == LauncherCommand.UPDATE:
+        logging.info("Checking for available updates to the Astroneer Dedicated Server...")
+        launcher.check_server_update(force_update=True)
+    elif args.command == LauncherCommand.START:
+        logging.info("Starting Astroneer Dedicated Server")
+        launcher.start_server()
+    
+    logging.debug("Application finished")
