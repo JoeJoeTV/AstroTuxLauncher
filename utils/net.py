@@ -14,6 +14,8 @@ import threading
 import logging
 from contextlib import contextmanager
 
+import traceback
+
 def get_request(url, timeout=5):
     """
         Perform a GET request to {url} while using system spefified proxies and SSL.
@@ -57,7 +59,7 @@ def post_request(url, headers={}, jsonData={}, timeout=5):
         jsonString = json.dumps(jsonData).encode("utf-8")
         req.add_header("Content-Type", "application/json; charset=utf-8")
     else:
-        jsonString = None
+        jsonString = b""
     
     for header, value in headers.items():
         req.add_header(header, value)
@@ -78,8 +80,10 @@ def post_request(url, headers={}, jsonData={}, timeout=5):
     return response
 
 def get_public_ip():
+    logging.debug("Getting IP from remote service")
     url = "https://api.ipify.org?format=json"
     x = json.load(get_request(url))
+    logging.debug(f"Received data: {json.dumps(x)}")
     return x['ip']
 
 def valid_ip(address):
@@ -95,6 +99,7 @@ def tcp_socket_scope(ip, port):
     """ Creates TCP socket and closes it. For use in combination with with statement """
     s = None
     try:
+        logging.debug(f"Connecting TCP socket to {ip}:{port}")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(5)
         s.connect((ip, int(port)))
@@ -110,13 +115,16 @@ def secret_socket_client(ip, port, secret, tcp):
     try:
         if tcp:
             with tcp_socket_scope(ip, port) as s:
+                logging.debug(f"Sending {secret} over TCP")
                 s.sendall(secret)
         else:
+            logging.debug(f"Sending {secret} over UDP")
             time.sleep(2)
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.sendto(secret, (ip, port))
-    except:
-        pass
+    except Exception as e:
+        logging.error(f"Error during receiving: {str(e)}")
+        logging.error(traceback.format_exc())
 
 def secret_socket_server(port, secret, tcp):
     """
@@ -125,6 +133,7 @@ def secret_socket_server(port, secret, tcp):
         {tcp} indicates if TCP or UDP should be used.
     """
     try:
+        logging.debug("Creating socket")
         # Create correct socket
         if tcp:
             server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -133,8 +142,10 @@ def secret_socket_server(port, secret, tcp):
         
         server_socket.settimeout(10)
         
+        logging.debug("Binding socket to public ip and port")
+        
         # Bind to public host
-        server_socket.bin(("0.0.0.0", port))
+        server_socket.bind(("0.0.0.0", port))
         
         # Become server socket
         if tcp:
@@ -146,23 +157,29 @@ def secret_socket_server(port, secret, tcp):
             
             if tcp:
                 connection, _client_address = server_socket.accept()
+                logging.debug("Accepted client")
             
             # Receive and check data
             while True:
                 if tcp:
                     data = connection.recv(32)
                 else:
-                    server_socket.recv(32)
+                    data = server_socket.recv(32)
+                
+                logging.debug(f"Received data: {str(data)}")
                 
                 # If data matches, were finished
                 if data == secret:
+                    logging.debug("Data matches!")
                     if tcp:
                         connection.close()
                     
                     return True
                 else:
                     return False
-    except:
+    except Exception as e:
+        logging.error(f"Error during receiving: {str(e)}")
+        logging.error(traceback.format_exc())
         return False
     finally:
         server_socket.close()
@@ -174,9 +191,13 @@ def net_test_local(ip, port, tcp):
     
     secret_phrase = secrets.token_hex(16).encode()
     
+    logging.debug(f"Secret Token: {secret_phrase}")
+    
     # Send secret phrase to public IP
     send_thread = threading.Thread(target=secret_socket_client, args=(ip, port, secret_phrase, tcp))
     send_thread.start()
+    
+    time.sleep(0.01)
     
     # Try to receive secret phrase and return success
     return secret_socket_server(port, secret_phrase, tcp)
@@ -220,10 +241,13 @@ def net_test_nonlocal(ip, port):
     
     # Use external service to test connection
     try:
-        resp = json.load(post_request(f"https://servercheck.spycibot.com/api?ip_port={ip}:{port}", timeout=10))
+        resp = post_request(f"https://servercheck.spycibot.com/api?ip_port={ip}:{port}", timeout=10)
+        json_resp = json.load(resp)
     except:
         logging.warning("Connection to external service failed")
         logging.warning("Unable to verify connectivity from outside local network")
+        logging.debug(f"Response from external Service: {str(resp)}")
         return False
     
-    return resp["Server"]
+    
+    return json_resp["Server"]

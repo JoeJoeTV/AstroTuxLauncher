@@ -21,6 +21,8 @@ import time
 import astro.playfab as playfab
 from utils.interface import EventType, ConsoleParser
 import psutil
+from enum import Enum
+import socket
 
 #
 #   Configuration
@@ -361,10 +363,10 @@ class GameList:
     gameList: list[GameInfo] = field(default_factory=list)
 
 class ServerStatus(Enum):
-    OFF: "off"
-    STARTING: "starting"
-    RUNNING: "running"
-    STOPPING: "stopping"
+    OFF = "off"
+    STARTING = "starting"
+    RUNNING = "running"
+    STOPPING = "stopping"
 
 ASTRO_DS_CONFIG_PATH = "Astro/Saved/Config/WindowsServer/"
 
@@ -448,10 +450,18 @@ class AstroDedicatedServer:
             #TODO: Get info from Playfab API
             
             # Save player list before updating
-            prev_online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
-            prev_online_player_guids = [pi.playerGuid for pi in prev_online_players]
+            if self.curr_player_list:
+                prev_online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
+                prev_online_player_guids = [pi.playerGuid for pi in prev_online_players]
+            else:
+                prev_online_players = []
+                prev_online_player_guids = []
             
-            prev_active_save_name = self.curr_game_list.activeSaveName
+            if self.curr_game_list:
+                prev_active_save_name = self.curr_game_list.activeSaveName
+            else:
+                prev_active_save_name = None
+            
             if (prev_active_save_name is not None) and (prev_active_save_name != ""):
                 prev_active_save_time = [gi.date for gi in self.curr_game_list.gameList if gi.name == prev_active_save_name][0]
             else:

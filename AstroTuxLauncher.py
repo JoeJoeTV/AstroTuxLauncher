@@ -19,12 +19,14 @@ import sys
 from queue import Queue
 import shutil
 from utils import steam
-from utils.requests import get_request
+from utils.net import get_request
 from packaging import version
 import astro.playfab as playfab
 from astro.dedicatedserver import AstroDedicatedServer, ServerStatus
 import utils.net as net
 import signal
+import subprocess
+import time
 
 
 """
@@ -274,14 +276,18 @@ class AstroTuxLauncher():
         
         logging.debug("Creating/updating WINE prefix...")
         
-        cmd = [self.wine_exec, "wineboot"]
+        cmd = [self.wineexec, "wineboot"]
         env = os.environ.copy()
-        del env["DISPLAY"]
-        env["WINEPREFIX"] = self.wine_pfx
+        
+        # Remove DISPLAY environment variable to stop wine from creating a window
+        if "DISPLAY" in env:
+            del env["DISPLAY"]
+        
+        env["WINEPREFIX"] = self.config.WinePrefixPath
         env["WINEDEBUG"] = "-all"
         
         try:
-            wineprocess = subprocess.Popen(cmd, env=env, cwd=self.astro_path)
+            wineprocess = subprocess.Popen(cmd, env=env, cwd=self.config.AstroServerPath, stderr=subprocess.PIPE, stdout=subprocess.PIPE, close_fds=True)
             code = wineprocess.wait(timeout=30)
         except TimeoutError:
             logging.debug("Wine process took longer than 30 seconds, aborting")
@@ -300,9 +306,11 @@ class AstroTuxLauncher():
         server_local_reachable = net.net_test_local(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.engine_config.Port, False)
         
         # Check if server post is reachable from internet over UDP
-        server_nonlocal_rechable = net.net_test_nonlocal(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.engine_config.Port)
+        server_nonlocal_reachable = net.net_test_nonlocal(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.engine_config.Port)
         
-        test_res = (server_local_reachable, server_nonlocal_rechable)
+        test_res = (server_local_reachable, server_nonlocal_reachable)
+        
+        logging.debug(f"Test Matrix: {str(test_res)}")
         
         if test_res == (True, True):
             logging.info("Network configuration looks good")
@@ -430,7 +438,7 @@ class AstroTuxLauncher():
         logging.debug("Server loop finished")
     
     
-    def user_exit(self):
+    def user_exit(self, signal, frame):
         """ Callback for when user requests to exit the application """
         self.exit(graceful=True, reason="User Requested to exit")
     
@@ -471,7 +479,7 @@ if __name__ == "__main__":
     
     launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec)
     
-    signal.signal(signal.SIGING, self)
+    signal.signal(signal.SIGINT, launcher.user_exit)
     
     if args.command == LauncherCommand.INSTALL:
         logging.info("Installing Astroneer Dedicated Server...")
