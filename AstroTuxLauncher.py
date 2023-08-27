@@ -425,6 +425,8 @@ class AstroTuxLauncher():
         if self.config.CheckNetwork:
             self.check_network_config()
         
+        self.input_thread.start()
+        
         # Prepare and start dedicated server
         try:
             self.dedicatedserver.start()
@@ -432,6 +434,10 @@ class AstroTuxLauncher():
             logging.error(f"There as an error while starting the Dedicated Server: {str(e)}")
             self.exit(reason="Error while starting Dedicated Server")
         
+        logging.debug("Activating input thread...")
+        self.input_thread.set_active(True)
+        
+        logging.debug("Starting server loop...")
         # Run Server Loop
         self.dedicatedserver.server_loop()
         

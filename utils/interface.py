@@ -29,16 +29,26 @@ class KeyboardThread(threading.Thread):
         
         self.daemon = True
     
-    def set_active(active=True):
-        self.active = active
+    def set_active(self, active=True):
+        try:
+            self.active = active
+            
+            logging.debug(f"Set input thread active: {str(self.active)}")
+        except Exception as e:
+            logging.error(f"Error in input thread set_active: {str(e)}")
     
     def run(self):
-        while True:
-            input_string = input()
-            
-            # Only process input, if active, else, ignore it
-            if active:
-                self.callback(input_string)
+        try:
+            while True:
+                input_string = input()
+                
+                logging.debug(f"Got input: {input_string}")
+                
+                # Only process input, if active, else, ignore it
+                if self.active:
+                    self.callback(input_string)
+        except Exception as e:
+            logging.error(f"Error in input thread run: {str(e)}")
 
 
 #

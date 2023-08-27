@@ -380,6 +380,7 @@ class AstroDedicatedServer:
         self.wineserver_exec = self.launcher.wineserverexec
         self.wine_pfx = self.launcher.config.WinePrefixPath
         
+        #TODO: Initialize to dataclasses with empty lists
         # Variables for storing data received from server
         self.curr_server_stat = None
         self.curr_player_list = None
@@ -463,7 +464,8 @@ class AstroDedicatedServer:
                 prev_active_save_name = None
             
             if (prev_active_save_name is not None) and (prev_active_save_name != ""):
-                prev_active_save_time = [gi.date for gi in self.curr_game_list.gameList if gi.name == prev_active_save_name][0]
+                save_date_list = [gi.date for gi in self.curr_game_list.gameList if gi.name == prev_active_save_name]
+                prev_active_save_time = save_date_list[0] if len(save_date_list) > 0 else 0
             else:
                 prev_active_save_time = 0
             
@@ -473,7 +475,11 @@ class AstroDedicatedServer:
             # Get information from server via RCON
             if self.rcon.connected and self.update_server_info():
                 # Current player list
-                online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
+                if self.curr_player_list:
+                    online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
+                else:
+                    online_players = []
+                
                 online_player_guids = [pi.playerGuid for pi in online_players]
                 
                 # If the amount of players now is greater than before the update, players have joined
@@ -511,9 +517,14 @@ class AstroDedicatedServer:
                             self.launcher.notifications.send_event(EventType.PLAYER_LEAVE, player_name=info["name"], player_guid=info["guid"])
                 
                 # Get current savegame information
-                active_save_name = self.curr_game_list.activeSaveName
+                if self.curr_game_list:
+                    active_save_name = self.curr_game_list.activeSaveName
+                else:
+                    active_save_name = None
+                
                 if (active_save_name is not None) and (active_save_name != ""):
-                    active_save_time = [gi.date for gi in self.curr_game_list.gameList if gi.name == active_save_name][0]
+                    save_date_list = [gi.date for gi in self.curr_game_list.gameList if gi.name == active_save_name]
+                    active_save_time = save_date_list[0] if len(save_date_list) > 0 else 0
                 else:
                     active_save_time = 0
                 
