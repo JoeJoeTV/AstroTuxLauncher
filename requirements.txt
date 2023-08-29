@@ -1,0 +1,11 @@
+alive_progress
+chardet
+colorlog
+dataclasses_json
+IPy
+packaging
+pansi
+pathvalidate
+psutil
+tomli
+tomli_w
