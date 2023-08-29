@@ -18,6 +18,8 @@ import json
 
 DOTS_SPINNER = frame_spinner_factory("⣷⣯⣟⡿⢿⣻⣽⣾")
 
+LOGGER = logging.getLogger("Interface")
+
 #
 #   User Input
 #
@@ -34,27 +36,28 @@ class KeyboardThread(threading.Thread):
         super(KeyboardThread, self).__init__(name=name)
         
         self.daemon = True
+        self.logger = logging.getLogger(name)
     
     def set_active(self, active=True):
         try:
             self.active = active
             
-            logging.debug(f"Set input thread active: {str(self.active)}")
+            self.logger.debug(f"Set input thread active: {str(self.active)}")
         except Exception as e:
-            logging.error(f"Error in input thread set_active: {str(e)}")
+            self.logger.error(f"Error in input thread set_active: {str(e)}")
     
     def run(self):
         try:
             while True:
                 input_string = input()
                 
-                logging.debug(f"Got input: {input_string}")
+                self.logger.debug(f"Got input: {input_string}")
                 
                 # Only process input, if active, else, ignore it
                 if self.active:
                     self.callback(input_string)
         except Exception as e:
-            logging.error(f"Error in input thread run: {str(e)}")
+            self.logger.error(f"Error in input thread run: {str(e)}")
 
 
 #
@@ -81,6 +84,8 @@ class ProcessOutputThread(threading.Thread):
         
         self.daemon = True
         self._stop_event = threading.Event()
+        
+        self.logger = logging.getLogger(name)
     
     def stop(self):
         self._stop_event.set()
@@ -101,7 +106,7 @@ class ProcessOutputThread(threading.Thread):
             
             self.out.close()
         except Exception as e:
-            logging.error(f"Error in process output thread: {str(e)}")
+            self.logger.error(f"Error in process output thread: {str(e)}")
 
 #
 #   Console Command Parsing
@@ -729,11 +734,13 @@ class LoggingNotificationHandler(NotificationHandler):
         super().__init__(name, event_whitelist, event_formats)
         
         self.level_mapping = level_mapping
+        
+        self.logger = logging.getLogger("Notify")
     
     def _send_message(self, event_type, message):
         level = self.level_mapping[event_type]
         
-        logging.log(level, message)
+        self.logger.log(level, message)
 
 DISCORD_MESSAGE_TEMPLATE = """{{
     "content": null,
@@ -804,6 +811,8 @@ class DiscordNotificationHandler(QueuedNotificationHandler):
             event_formats[et] = safeformat(DISCORD_MESSAGE_TEMPLATE, message=event_formats[et])
         
         super().__init__(name, event_whitelist, event_formats)
+        
+        self.logger = logging.getLogger("DiscordNotify")
     
     def _send_message(self, event_type, message):
         extra = self.extra_mapping[event_type]
@@ -818,7 +827,7 @@ class DiscordNotificationHandler(QueuedNotificationHandler):
         try:
             resp = net.post_request(self.webhook_url, headers=DISCORD_HEADERS, jsonData=message_json)
         except Exception as e:
-            logging.error(f"Error while sending Discord notification: {str(e)}")
+            self.logger.error(f"Error while sending Discord notification: {str(e)}")
 
 NTFY_MESSAGE_TEMPLATE = """{{
     "topic": "{topic}",
@@ -869,6 +878,8 @@ class NTFYNotificationHandler(QueuedNotificationHandler):
             event_formats[et] = safeformat(NTFY_MESSAGE_TEMPLATE, message=event_formats[et], topic=self.topic)
         
         super().__init__(name, event_whitelist, event_formats)
+        
+        self.logger = logging.getLogger("NTFYNotify")
     
     def _send_message(self, event_type, message):
         extra = self.extra_mapping[event_type]
@@ -881,7 +892,7 @@ class NTFYNotificationHandler(QueuedNotificationHandler):
         try:
             resp = net.post_request(self.ntfy_url, headers=NTFY_HEADERS, jsonData=message_json)
         except Exception as e:
-            logging.error(f"Error while sending ntfy notification: {str(e)}")
+            self.logger.error(f"Error while sending ntfy notification: {str(e)}")
 
 #
 #   Miscellaneous
@@ -918,7 +929,7 @@ def run_proc_with_logging(args, name, format=PROC_FORMAT, sleep_time=0.05, level
             pass
         else:
             line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
-            logging.log(level, safeformat(format, name=name, message=line))
+            LOGGER.log(level, safeformat(format, name=name, message=line))
         
         if alive_bar:
             alive_bar()

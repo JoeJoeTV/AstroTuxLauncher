@@ -33,6 +33,8 @@ import time
 Code based on https://github.com/ricky-davis/AstroLauncher
 """
 
+LOGGER = logging.getLogger("Launcher")
+
 BANNER_LOGO = f"""{ansi.weight.bold}
     {ansi.BLUE}___         __           {ansi.YELLOW}______          
    {ansi.BLUE}/   |  _____/ /__________{ansi.YELLOW}/_  __/_  ___  __
@@ -171,12 +173,12 @@ class AstroTuxLauncher():
         try:
             self.config_path = path.abspath(config_path)
             
-            logging.info(f"Configuration file path: {self.config_path}")
+            LOGGER.info(f"Configuration file path: {self.config_path}")
             
             self.config = LauncherConfig.ensure_toml_config(self.config_path)
         except Exception as e:
-            logging.error(f"Error while loading config file ({type(e).__name__}): {str(e)}")
-            logging.error(f"Please check the config path parameter and/or config file")
+            LOGGER.error(f"Error while loading config file ({type(e).__name__}): {str(e)}")
+            LOGGER.error(f"Please check the config path parameter and/or config file")
             self.exit()
         
         # If cli parameter is specified, it overrides the config value
@@ -197,9 +199,9 @@ class AstroTuxLauncher():
             self.wineserverexec = path.join(path.dirname(self.wineexec), "wineserver")
         
         if (self.wineexec is None) or (self.wineserverexec is None):
-            logging.error("Wine (or Wineserver) executable not found!")
-            logging.error("Make sure that you have wine installed and accessible")
-            logging.error("or set 'OverrideWinePath' config option to the path of the wine executable")
+            LOGGER.error("Wine (or Wineserver) executable not found!")
+            LOGGER.error("Make sure that you have wine installed and accessible")
+            LOGGER.error("or set 'OverrideWinePath' config option to the path of the wine executable")
             self.exit()
         
         # Finish setting up logging
@@ -219,9 +221,9 @@ class AstroTuxLauncher():
             
             if path.isfile(depotdl_exec):
                 self.depotdl_path = path.abspath(depotdl_exec)
-                logging.info(f"DepotDownloader path overridden: {self.depotdl_path}")
+                LOGGER.info(f"DepotDownloader path overridden: {self.depotdl_path}")
             else:
-                logging.warning("The given DepotDownloader path doesn't point to a file, using default path")
+                LOGGER.warning("The given DepotDownloader path doesn't point to a file, using default path")
         
         # If argument is not given, default path is used and may not exists yet, so create directories
         if self.depotdl_path is None:
@@ -229,8 +231,8 @@ class AstroTuxLauncher():
             os.makedirs(path.dirname(self.depotdl_path), exist_ok=True)
         
         # Log some information about loaded paths, configs, etc.
-        logging.info(f"Working directory: {self.launcherPath}")
-        logging.debug(f"Launcher configuration (including overrides):\n{json.dumps(self.config.to_dict(encode_json=True), indent=4)}")
+        LOGGER.info(f"Working directory: {self.launcherPath}")
+        LOGGER.debug(f"Launcher configuration (including overrides):\n{json.dumps(self.config.to_dict(encode_json=True), indent=4)}")
         
         # Initialize console command parser
         self.console_parser = interface.ConsoleParser()
@@ -248,12 +250,12 @@ class AstroTuxLauncher():
             if self.config.notifications.discord.webhookURL:
                 self.notifications.add_handler(interface.DiscordNotificationHandler(self.config.notifications.discord.webhookURL, name=self.config.notifications.name))
             else:
-                logging.warning("Discord Webhook URL is not set in config, not sending Discord notifications")
+                LOGGER.warning("Discord Webhook URL is not set in config, not sending Discord notifications")
         elif self.config.notifications.method == NotificationMethod.NTFY:
             if self.config.notifications.ntfy.topic:
                 self.notifications.add_handler(interface.NTFYNotificationHandler(self.config.notifications.ntfy.topic, ntfy_url=self.config.notifications.ntfy.serverURL, name=self.config.notifications.name))
             else:
-                logging.warning("ntfy topic is not set in config, not sending ntfy notifications")
+                LOGGER.warning("ntfy topic is not set in config, not sending ntfy notifications")
         
         # Create Dedicated Server object
         self.dedicatedserver = AstroDedicatedServer(self)
@@ -274,21 +276,21 @@ class AstroTuxLauncher():
         if success:
             if result["cmd"] == interface.ConsoleParser.Command.HELP:
                 # If it's a help command, we don't need to add it to the command queue as there is nothing to be done
-                logging.info(result["message"])
+                LOGGER.info(result["message"])
             else:
                 # Add any other command to the command queue to be processed later
                 self.cmd_queue.put(result)
         else:
             # If an error occured, {result} is just a message, so log it to console
             # We send event for command first, when it's processed
-            logging.warning(result)
+            LOGGER.warning(result)
 
     def update_wine_prefix(self):
         """
             Creates/updated the WINE prefix
         """
         
-        logging.debug("Ensuring WINE prefix is setup...")
+        LOGGER.debug("Ensuring WINE prefix is setup...")
         
         cmd = [self.wineexec, "wineboot"]
         env = os.environ.copy()
@@ -300,16 +302,16 @@ class AstroTuxLauncher():
         env["WINEPREFIX"] = self.config.WinePrefixPath
         env["WINEDEBUG"] = "-all"
         
-        logging.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.config.WinePrefixPath}'...")
+        LOGGER.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.config.WinePrefixPath}'...")
         
         try:
             wineprocess = subprocess.Popen(cmd, env=env, cwd=self.config.AstroServerPath, stderr=subprocess.PIPE, stdout=subprocess.PIPE, close_fds=True)
             code = wineprocess.wait(timeout=30)
         except TimeoutError:
-            logging.debug("Wine process took longer than 30 seconds, aborting")
+            LOGGER.debug("Wine process took longer than 30 seconds, aborting")
             return False
         except Exception as e:
-            logging.error(f"Error occured during updating of wine prefix: {str(e)}")
+            LOGGER.error(f"Error occured during updating of wine prefix: {str(e)}")
             return False
         
         return code == 0    
@@ -318,7 +320,7 @@ class AstroTuxLauncher():
         if not self.dedicatedserver:
             raise ValueError("Dedcated Server has to be created first")
         
-        logging.info("Checking Network Configuration...")
+        LOGGER.info("Checking Network Configuration...")
         
         # Check if server port is reachable from local network over UDP
         server_local_reachable = net.net_test_local(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.engine_config.Port, False)
@@ -329,25 +331,25 @@ class AstroTuxLauncher():
         test_res = (server_local_reachable, server_nonlocal_reachable)
         
         if test_res == (True, True):
-            logging.info("Network configuration looks good")
+            LOGGER.info("Network configuration looks good")
         elif test_res == (False, True):
-            logging.warning("The Server is not accessible from the local network")
-            logging.warning("This usually indicates an issue with NAT Loopback")
+            LOGGER.warning("The Server is not accessible from the local network")
+            LOGGER.warning("This usually indicates an issue with NAT Loopback")
         elif test_res == (True, False):
-            logging.warning("The server can be reached locally, but not from outside of the local network")
-            logging.warning(f"Make sure the Server Port ({self.dedicatedserver.engine_config.Port}) is forwarded for UDP traffic")
+            LOGGER.warning("The server can be reached locally, but not from outside of the local network")
+            LOGGER.warning(f"Make sure the Server Port ({self.dedicatedserver.engine_config.Port}) is forwarded for UDP traffic")
         elif test_res == (False, False):
-            logging.warning("The Server is completely unreachable")
-            logging.warning(f"Make sure the Server Port ({self.dedicatedserver.engine_config.Port}) is forwarded for UDP traffic and check firewall settings")
+            LOGGER.warning("The Server is completely unreachable")
+            LOGGER.warning(f"Make sure the Server Port ({self.dedicatedserver.engine_config.Port}) is forwarded for UDP traffic and check firewall settings")
         
         rcon_local_blocked = not net.net_test_local(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.ds_config.ConsolePort, True)
         
         if rcon_local_blocked:
-            logging.info("RCON network configuration looks good")
+            LOGGER.info("RCON network configuration looks good")
         else:
-            logging.warning(f"SECURITY ALERT: The RCON Port ({self.dedicatedserver.ds_config.ConsolePort}) is accessible from outside")
-            logging.warning("SECURITY ALERT: This potentially allows access to the Remote Console from outside your network")
-            logging.warning("SECURITY ALERT: Disable this ASAP to prevent issues")
+            LOGGER.warning(f"SECURITY ALERT: The RCON Port ({self.dedicatedserver.ds_config.ConsolePort}) is accessible from outside")
+            LOGGER.warning("SECURITY ALERT: This potentially allows access to the Remote Console from outside your network")
+            LOGGER.warning("SECURITY ALERT: Disable this ASAP to prevent issues")
             
             # kept from AstroLauncher
             time.sleep(5)
@@ -360,18 +362,18 @@ class AstroTuxLauncher():
         
         # If DepotDownloader executable doesn't exists yet, download it
         if not path.exists(self.depotdl_path):
-            logging.info("DepotDownloader not found, downloading...")
+            LOGGER.info("DepotDownloader not found, downloading...")
             steam.dl_depotdownloader(path.dirname(self.depotdl_path), path.basename(self.depotdl_path))
         
-        logging.info("Updating Astroneer Dedicated Server app from Steam...")
+        LOGGER.info("Updating Astroneer Dedicated Server app from Steam...")
         success = steam.update_app(exec_path=self.depotdl_path, app="728470", os="windows", directory=self.config.AstroServerPath)
         
         self.buildversion = read_build_version(self.config.AstroServerPath)
         
         if success and (self.buildversion is not None):
-            logging.info(f"Sucessfully updated Astroneer Dedicated Server to version {self.buildversion}")
+            LOGGER.info(f"Sucessfully updated Astroneer Dedicated Server to version {self.buildversion}")
         else:
-            logging.error("Error while updating Astroneer Dedicated Server")
+            LOGGER.error("Error while updating Astroneer Dedicated Server")
     
     def check_server_update(self, force_update=False):
         """
@@ -386,7 +388,7 @@ class AstroTuxLauncher():
         
         if (oldversion is None) or not self.check_ds_executable():
             # No version is present yet or executable not present, we need an update/installation
-            logging.warning("Astroneer Dedicated Server is not installed yet")
+            LOGGER.warning("Astroneer Dedicated Server is not installed yet")
             do_update = True
             installed = False
         else:
@@ -396,27 +398,27 @@ class AstroTuxLauncher():
                 newversion = data["LatestVersion"]
                 
                 if version.parse(newversion) > version.parse(oldversion):
-                    logging.warn(f"Astroneer Dedicated Server update available ({oldversion} -> {newversion})")
+                    LOGGER.warning(f"Astroneer Dedicated Server update available ({oldversion} -> {newversion})")
                     do_update = True
             except Exception as e:
-                logging.error(f"Error occured while checking for newest version: {str(e)}")
+                LOGGER.error(f"Error occured while checking for newest version: {str(e)}")
 
         if do_update:
             if self.config.AutoUpdateServer:
                 if installed:
-                    logging.info("Automatically updating Astroneer Dedicated Server...")
+                    LOGGER.info("Automatically updating Astroneer Dedicated Server...")
                 else:
-                    logging.info("Automatically installing Astroneer Dedicated Server...")
+                    LOGGER.info("Automatically installing Astroneer Dedicated Server...")
             
             if self.config.AutoUpdateServer or force_update:
                 self.update_server()
             else:
-                logging.info("Not installing/updating automatically")
+                LOGGER.info("Not installing/updating automatically")
         else:
             if force_update:
-                logging.info("Noting to do")
+                LOGGER.info("Noting to do")
             else:
-                logging.info("No update available, the Astroneer Dedicated Server is on the newest version")
+                LOGGER.info("No update available, the Astroneer Dedicated Server is on the newest version")
         
     def start_server(self):
         """
@@ -428,7 +430,7 @@ class AstroTuxLauncher():
         
         # If Playfab API can't be reached, we can't continue
         if not playfab.check_api_health():
-            logging.error("Playfab API is unavailable. Are you connected to the internet?")
+            LOGGER.error("Playfab API is unavailable. Are you connected to the internet?")
             self.exit(reason="Playfab API unavailable")
         
         # Make sure wine prefix is ready
@@ -443,7 +445,7 @@ class AstroTuxLauncher():
         if self.config.CheckNetwork:
             self.check_network_config()
         
-        logging.debug("Starting input thread...")
+        LOGGER.debug("Starting input thread...")
         self.input_thread.start()
         
         # Prepare and start dedicated server
@@ -451,13 +453,13 @@ class AstroTuxLauncher():
             if not self.dedicatedserver.start():
                 return
         except Exception as e:
-            logging.error(f"There as an error while starting the Dedicated Server: {str(e)}")
+            LOGGER.error(f"There as an error while starting the Dedicated Server: {str(e)}")
             self.exit(reason="Error while starting Dedicated Server")
         
-        logging.info("Enter 'help' to get help about command usage")
+        LOGGER.info("Enter 'help' to get help about command usage")
         
         # Run Server Loop
-        logging.debug("Starting server loop...")
+        LOGGER.debug("Starting server loop...")
         self.dedicatedserver.server_loop()
     
     
@@ -468,9 +470,9 @@ class AstroTuxLauncher():
     def exit(self, graceful=False, reason=None):
         if graceful:
             if reason:
-                logging.info(f"Quitting gracefully... (Reason: {reason})")
+                LOGGER.info(f"Quitting gracefully... (Reason: {reason})")
             else:
-                logging.info("Quitting gracefully...")
+                LOGGER.info("Quitting gracefully...")
             
             if self.dedicatedserver and self.dedicatedserver.status in [ServerStatus.RUNNING, ServerStatus.STARTING]:
                 # If no RCON is connected while running or starting, simply kill server
@@ -479,19 +481,19 @@ class AstroTuxLauncher():
                     return
                 
                 # If server is running, simply shut it down and return to let it finish normally
-                logging.debug("Shutting down Dedicated Server before quitting...")
+                LOGGER.debug("Shutting down Dedicated Server before quitting...")
                 self.dedicatedserver.shutdown()
                 return
             else:
                 # If no server is running, exit directly
-                logging.info("Goodbye!")
-                logging.debug("Quitting with exit code 0...")
+                LOGGER.info("Goodbye!")
+                LOGGER.debug("Quitting with exit code 0...")
                 sys.exit(0)
         else:
             if reason:
-                logging.info(f"Quitting... (Reason: {reason})")
+                LOGGER.info(f"Quitting... (Reason: {reason})")
             else:
-                logging.info("Quitting...")
+                LOGGER.info("Quitting...")
             
             # Kill server if it's running or not
             self.dedicatedserver.kill()
@@ -527,13 +529,13 @@ if __name__ == "__main__":
     
     signal.signal(signal.SIGINT, launcher.user_exit)
     
-    logging.debug(f"CLI Command: {args.command.value}")
+    LOGGER.debug(f"CLI Command: {args.command.value}")
     
     if args.command == LauncherCommand.INSTALL:
-        logging.info("Installing Astroneer Dedicated Server...")
+        LOGGER.info("Installing Astroneer Dedicated Server...")
         launcher.update_server()
     elif args.command == LauncherCommand.UPDATE:
-        logging.info("Checking for available updates to the Astroneer Dedicated Server...")
+        LOGGER.info("Checking for available updates to the Astroneer Dedicated Server...")
         launcher.check_server_update(force_update=True)
     elif args.command == LauncherCommand.START:
         try:
@@ -544,4 +546,4 @@ if __name__ == "__main__":
             
             raise
     
-    logging.info("Goodbye!")
+    LOGGER.info("Goodbye!")

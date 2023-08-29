@@ -16,6 +16,8 @@ from contextlib import contextmanager
 
 import traceback
 
+LOGGER = logging.getLogger("Net")
+
 def get_request(url, timeout=5):
     """
         Perform a GET request to {url} while using system spefified proxies and SSL.
@@ -80,10 +82,10 @@ def post_request(url, headers={}, jsonData={}, timeout=5):
     return response
 
 def get_public_ip():
-    logging.info("Getting IP from remote service")
+    LOGGER.info("Getting IP from remote service")
     url = "https://api.ipify.org?format=json"
     x = json.load(get_request(url))
-    logging.debug(f"Received data: {json.dumps(x)}")
+    LOGGER.debug(f"Received data: {json.dumps(x)}")
     return x['ip']
 
 def valid_ip(address):
@@ -160,14 +162,14 @@ def secret_socket_server(port, secret, tcp):
                 
                 # If data matches, were finished
                 if data == secret:
-                    logging.debug("Received Data matches expected secret")
+                    LOGGER.debug("Received Data matches expected secret")
                     
                     if tcp:
                         connection.close()
                     
                     return True
                 else:
-                    logging.debug(f"Received Data ({str(data)}) doesn't match expected secret ({str(secret)})")
+                    LOGGER.debug(f"Received Data ({str(data)}) doesn't match expected secret ({str(secret)})")
                     
                     return False
     except Exception as e:
@@ -233,9 +235,9 @@ def net_test_nonlocal(ip, port):
         resp = post_request(f"https://servercheck.spycibot.com/api?ip_port={ip}:{port}", timeout=10)
         json_resp = json.load(resp)
     except:
-        logging.warning("Connection to external service failed")
-        logging.warning("Unable to verify connectivity from outside local network")
-        logging.debug(f"Response from external Service: {str(resp)}")
+        LOGGER.warning("Connection to external service failed")
+        LOGGER.warning("Unable to verify connectivity from outside local network")
+        LOGGER.debug(f"Response from external Service: {str(resp)}")
         return False
     
     

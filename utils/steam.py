@@ -16,12 +16,13 @@ from alive_progress import alive_bar
 
 DEPOTDL_LATEST_ZIP_URL="https://github.com/SteamRE/DepotDownloader/releases/latest/download/DepotDownloader-linux-x64.zip"
 
+LOGGER = logging.getLogger("Steam")
 
 def reporthook(blocks_done, block_size, file_size):
     size_trans = blocks_done * block_size
     trans_percentage = (size_trans / file_size) * 100
     
-    logging.info(f"[Download] {trans_percentage}%")
+    LOGGER.info(f"[Download] {trans_percentage}%")
 
 class FileDownloader:
     """ Downloads a file while logging the percentage of the download """
@@ -49,10 +50,10 @@ class FileDownloader:
         percentage = (round(fraction * 100) // self.percent_mod) * self.percent_mod
         
         if percentage > 100:
-            logging.debug(f"Download percentage overshoot: {percentage}%")
+            LOGGER.debug(f"Download percentage overshoot: {percentage}%")
         
         if percentage != self._prev_percentage:
-            logging.log(self.log_level, safeformat(self.msg_format, percentage=percentage))
+            LOGGER.log(self.log_level, safeformat(self.msg_format, percentage=percentage))
             self._prev_percentage = percentage
     
     def download(self, alive_bar=None):
@@ -76,7 +77,7 @@ def dl_depotdownloader(dest_dir, execname="depotdownloader"):
         # Download DepotDownloader release zip and save it in temporary directory
         dl = FileDownloader(DEPOTDL_LATEST_ZIP_URL, filename=path.join(tmpdir, "depotdl.zip"), log_level=logging.DEBUG, percent_mod=5)
         
-        logging.debug(f"Downloading '{DEPOTDL_LATEST_ZIP_URL}' to '{path.join(tmpdir, 'depotdl.zip')}'")
+        LOGGER.debug(f"Downloading '{DEPOTDL_LATEST_ZIP_URL}' to '{path.join(tmpdir, 'depotdl.zip')}'")
         
         start_time = time.time()
         
@@ -102,7 +103,7 @@ def dl_depotdownloader(dest_dir, execname="depotdownloader"):
         end_time = time.time()
         elapsed = end_time - start_time
         
-        logging.info(f"Finished downloading DepotDownloader in {round(elapsed, 2)} seconds")
+        LOGGER.info(f"Finished downloading DepotDownloader in {round(elapsed, 2)} seconds")
     
     return dest_path
 
@@ -124,7 +125,7 @@ def update_app(exec_path, app, os, directory):
     
     cmd_args = [str(exec_path), "-app", str(app), "-os", str(os), "-dir", path.abspath(directory), "-validate"]
     
-    logging.debug(f"Executing DepotDownloader command: {' '.join(cmd_args)}")
+    LOGGER.debug(f"Executing DepotDownloader command: {' '.join(cmd_args)}")
     
     start_time = time.time()
     
@@ -138,7 +139,7 @@ def update_app(exec_path, app, os, directory):
     success = (proc_res == 0)
     
     if success:
-        logging.info(f"Finished updating app {app} in {round(elapsed, 2)} seconds")
+        LOGGER.info(f"Finished updating app {app} in {round(elapsed, 2)} seconds")
     
     # Return boolean based on update process exit code
     return success

@@ -11,6 +11,8 @@ import time
 from utils.net import get_request, post_request
 import logging
 
+LOGGER = logging.getLogger("Playfab")
+
 #
 #   Methods for interacting with the Playfab Astroneer API
 #
@@ -41,7 +43,7 @@ def check_api_health():
         
         return resp["Healthy"] == True
     except Exception as e:
-        logging.debug(f"Error while checking for Playfab API health: {str(e)}")
+        LOGGER.debug(f"Error while checking for Playfab API health: {str(e)}")
         return False
 
 def generate_XAuth(serverGUID):

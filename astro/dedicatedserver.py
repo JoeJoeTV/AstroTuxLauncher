@@ -28,6 +28,9 @@ from queue import Queue, Empty
 import threading
 from alive_progress import alive_bar
 
+LOGGER = logging.getLogger("DedicatedServer")
+CMD_LOGGER = logging.getLogger("Command")
+
 #
 #   Configuration
 #
@@ -189,18 +192,18 @@ class DedicatedServerConfig:
         
         if ip_valid and (IP(config.PublicIP).iptype() != "PUBLIC"):
             ip_valid = False
-            logging.warn("PublicIP field in Dedicated Server config (AstroServerSettings.ini) contained a private IP")
+            LOGGER.warning("PublicIP field in Dedicated Server config (AstroServerSettings.ini) contained a private IP")
         
         # If requested or IP is invalid, replace with public IP gotten from online service
         if overwrite_ip or not ip_valid:
             try:
-                logging.info("Overwriting PublicIP field in Dedicated Server config...")
+                LOGGER.info("Overwriting PublicIP field in Dedicated Server config...")
                 config.PublicIP = net.get_public_ip()
             except Exception as e:
                 if ip_valid:
-                    logging.warn(f"Could not update PublicIP field: {str(e)}")
+                    LOGGER.warn(f"Could not update PublicIP field: {str(e)}")
                 else:
-                    logging.error(f"Could not update PublicIP field: {str(e)}")
+                    LOGGER.error(f"Could not update PublicIP field: {str(e)}")
         
         # Write config back to file to add missing entried and remove superflous ones
         # In the case of the file not existing prior, it will be created
@@ -399,15 +402,15 @@ class AstroDedicatedServer:
         self.ds_config = DedicatedServerConfig.ensure_config(ds_config_path, self.launcher.config.OverwritePublicIP)
         self.engine_config = EngineConfig.ensure_config(engine_config_path, self.launcher.config.DisableEncryption)
         
-        logging.debug(f"Dedicated Server configuration (including overrides):\n{json.dumps(self.ds_config.to_dict(encode_json=True), indent=4)}")
-        logging.debug(f"Engine configuration (including overrides):\n{json.dumps(self.engine_config.to_dict(encode_json=True), indent=4)}")
+        LOGGER.debug(f"Dedicated Server configuration (including overrides):\n{json.dumps(self.ds_config.to_dict(encode_json=True), indent=4)}")
+        LOGGER.debug(f"Engine configuration (including overrides):\n{json.dumps(self.engine_config.to_dict(encode_json=True), indent=4)}")
         
         # Warning, if encryption is enables
         if self.engine_config.AllowEncryption:
-            logging.warning("Encryption is enabled. Currently, this doesn't work when running the Astroneer Dedicated Server using WINE")
-            logging.warning("Players that have encryption disabled will also ne be able to play on a server having encryption enabled")
+            LOGGER.warning("Encryption is enabled. Currently, this doesn't work when running the Astroneer Dedicated Server using WINE")
+            LOGGER.warning("Players that have encryption disabled will also ne be able to play on a server having encryption enabled")
         else:
-            logging.info("NOTICE: Encryption is disabled. All players that want to join the Dedicated Server have to disable encryption on their clients too")
+            LOGGER.info("NOTICE: Encryption is disabled. All players that want to join the Dedicated Server have to disable encryption on their clients too")
         
         # RCON
         self.rcon = AstroRCON(self.ds_config.ConsolePort, self.ds_config.ConsolePassword)
@@ -453,20 +456,20 @@ class AstroDedicatedServer:
                 if conn:
                     self.quick_toggle_whitelist()
                 else:
-                    logging.debug("Failed to connect RCON")
+                    LOGGER.debug("Failed to connect RCON")
             
             # Check server process status
             proc_status = self.process.poll()
             if proc_status is not None:
                 if self.status == ServerStatus.STOPPING and proc_status == 0:
-                    logging.info("Dedicated Server shut down gracefully")
+                    LOGGER.info("Dedicated Server shut down gracefully")
                     break
                 
                 if proc_status != 0:
                     self.launcher.notifications.send_event(EventType.CRASH, server_version=self.build_version)
                 
                 # Server process has exited
-                logging.debug(f"Server process closed with exit code {proc_status}")
+                LOGGER.debug(f"Server process closed with exit code {proc_status}")
                 break
             else:
                 # Print all lines currently in process output queue
@@ -477,7 +480,7 @@ class AstroDedicatedServer:
                         break
                     else:
                         line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
-                        logging.debug(f"[AstroDS] {line}")
+                        LOGGER.debug(f"[AstroDS] {line}")
             
             # If not connected to RCON, skip following code as it requires RCON
             if not self.rcon.connected:
@@ -488,14 +491,14 @@ class AstroDedicatedServer:
             update_server_data = False
             
             if self.last_server_status is None:
-                logging.debug("Doing initial Server status data update")
+                LOGGER.debug("Doing initial Server status data update")
                 
                 # If we haven't requested any data yet, do it now
                 update_server_data = False
                 if self.update_server_info():
                     self.last_server_status = time.time()
                 else:
-                    logging.warning("Getting information from Dedicated Server failed!")
+                    LOGGER.warning("Getting information from Dedicated Server failed!")
                 
             elif (time.time() - self.last_server_status) >= self.launcher.config.ServerStatusInterval:
                 # If the time interval since the last status update is big wnough, do another one
@@ -574,8 +577,9 @@ class AstroDedicatedServer:
                             if active_save_time != prev_active_save_time:
                                 self.launcher.notifications.send_event(EventType.SAVE, savegame_name=active_save_name, server_version=self.build_version)
                 except Exception as e:
-                    logging.debug(f"Error while doing status update: {str(e)}")
-                    logging.error(traceback.format_exc())
+                    LOGGER.debug(f"Error while doing status update: {str(e)}")
+                    LOGGER.error(traceback.format_exc())
+            
             
             # Handle console commands in queue
             while not self.launcher.cmd_queue.empty():                
@@ -590,26 +594,26 @@ class AstroDedicatedServer:
                         success = self.shutdown()
                         
                         if not success:
-                            logging.warning("There was a problem while shutting down the dedicated server")
+                            CMD_LOGGER.warning("There was a problem while shutting down the dedicated server")
                         
                     elif args["cmd"] == ConsoleParser.Command.RESTART:
                         #TODO: IMPLEMENT
-                        logging.warning("The restart command is not implemented yet")
+                        CMD_LOGGER.warning("The restart command is not implemented yet")
                         
                     elif args["cmd"] == ConsoleParser.Command.INFO:
                         if self.curr_server_stat is not None:
-                            logging.info("Information about the Dedicated Server:")
-                            logging.info(f"    - Build: {self.curr_server_stat.build}")
-                            logging.info(f"    - Server URL: {self.curr_server_stat.serverURL}")
-                            logging.info(f"    - Owner: {self.curr_server_stat.ownerName}")
-                            logging.info(f"    - Has Password: {'yes' if self.curr_server_stat.hasServerPassword else 'no'}")
-                            logging.info(f"    - Whitelist: {'enabled' if self.curr_server_stat.isEnforcingWhitelist else 'disabled'}")
-                            logging.info(f"    - Creative Mode: {'yes' if self.curr_server_stat.creativeMode else 'no'}")
-                            logging.info(f"    - Save Game: {self.curr_server_stat.saveGameName}")
-                            logging.info(f"    - Players: {len(self.curr_player_list.playerInfo)}/{self.curr_server_stat.maxInGamePlayers}")
-                            logging.info(f"    - Average FPS: {self.curr_server_stat.averageFPS}")
+                            CMD_LOGGER.info("Information about the Dedicated Server:")
+                            CMD_LOGGER.info(f"    - Build: {self.curr_server_stat.build}")
+                            CMD_LOGGER.info(f"    - Server URL: {self.curr_server_stat.serverURL}")
+                            CMD_LOGGER.info(f"    - Owner: {self.curr_server_stat.ownerName}")
+                            CMD_LOGGER.info(f"    - Has Password: {'yes' if self.curr_server_stat.hasServerPassword else 'no'}")
+                            CMD_LOGGER.info(f"    - Whitelist: {'enabled' if self.curr_server_stat.isEnforcingWhitelist else 'disabled'}")
+                            CMD_LOGGER.info(f"    - Creative Mode: {'yes' if self.curr_server_stat.creativeMode else 'no'}")
+                            CMD_LOGGER.info(f"    - Save Game: {self.curr_server_stat.saveGameName}")
+                            CMD_LOGGER.info(f"    - Players: {len(self.curr_player_list.playerInfo)}/{self.curr_server_stat.maxInGamePlayers}")
+                            CMD_LOGGER.info(f"    - Average FPS: {self.curr_server_stat.averageFPS}")
                         else:
-                            logging.info("Server information not available right now")
+                            CMD_LOGGER.info("Server information not available right now")
 
                     elif args["cmd"] == ConsoleParser.Command.KICK:
                         self.kick_player(name=args["player"], guid=args["player"])
@@ -619,17 +623,17 @@ class AstroDedicatedServer:
                             success = self.set_whitelist_enabled(True)
                             
                             if success:
-                                logging.info("Successfully enabled whitelist")
+                                CMD_LOGGER.info("Successfully enabled whitelist")
                         elif args["subcmd"] == ConsoleParser.WhitelistSubcommand.DISABLE:
                             success = self.set_whitelist_enabled(False)
                             
                             if success:
-                                logging.info("Successfully disabled whitelist")
+                                CMD_LOGGER.info("Successfully disabled whitelist")
                         elif args["subcmd"] == ConsoleParser.WhitelistSubcommand.STATUS:
-                            logging.info(f"The whitelist is currently {'enabled' if self.curr_server_stat.isEnforcingWhitelist else 'disabled'}")
+                            CMD_LOGGER.info(f"The whitelist is currently {'enabled' if self.curr_server_stat.isEnforcingWhitelist else 'disabled'}")
                         
                         if not success:
-                            logging.warning("There was a problem while setting the whitelist status")
+                            CMD_LOGGER.warning("There was a problem while setting the whitelist status")
 
                     elif args["cmd"] == ConsoleParser.Command.LIST:
                         if self.curr_player_list is not None:
@@ -638,59 +642,59 @@ class AstroDedicatedServer:
                             else:
                                 category = PlayerCategory[args["category"].name]
                             
-                            logging.info("Online Players:")
+                            CMD_LOGGER.info("Online Players:")
                             
                             for pi in self.curr_player_list.playerInfo:
                                 if pi.inGame and ((category is None) or (category == pi.playerCategory)):
-                                    logging.info(f"    - {pi.playerName}({pi.playerGuid})")
+                                    CMD_LOGGER.info(f"    - {pi.playerName}({pi.playerGuid})")
                         else:
-                            logging.info("Player information not available right now")
+                            CMD_LOGGER.info("Player information not available right now")
 
                     elif args["cmd"] == ConsoleParser.Command.SAVEGAME:
                         if args["subcmd"] == ConsoleParser.SaveGameSubcommand.LOAD:
                             try:
                                 success = self.load_game(args["save_name"])
                             except Exception as e:
-                                logging.error(f"Error while executing command: {str(e)}")
+                                CMD_LOGGER.error(f"Error while executing command: {str(e)}")
                             
                             if success:
-                                logging.info(f"Successfully loaded {args['save_name']}")
+                                CMD_LOGGER.info(f"Successfully loaded {args['save_name']}")
                             else:
-                                logging.warning("There was a problem while executing the command")
+                                CMD_LOGGER.warning("There was a problem while executing the command")
                         if args["subcmd"] == ConsoleParser.SaveGameSubcommand.SAVE:
                             try:
                                 success = self.save_game(args["save_name"])
                             except Exception as e:
-                                logging.error(f"Error while executing command: {str(e)}")
+                                CMD_LOGGER.error(f"Error while executing command: {str(e)}")
                                 
                             if success:
-                                logging.info("Successfully saved the game")
+                                CMD_LOGGER.info("Successfully saved the game")
                             else:
-                                logging.warning("There was a problem while executing the command")
+                                CMD_LOGGER.warning("There was a problem while executing the command")
                         if args["subcmd"] == ConsoleParser.SaveGameSubcommand.NEW:
                             try:
                                 success = self.new_game(args["save_name"])
                             except Exception as e:
-                                logging.error(f"Error while executing command: {str(e)}")
+                                CMD_LOGGER.error(f"Error while executing command: {str(e)}")
                                 
                             if success:
-                                logging.info("Successfully created a new save game")
+                                CMD_LOGGER.info("Successfully created a new save game")
                             else:
-                                logging.warning("There was a problem while executing the command")
+                                CMD_LOGGER.warning("There was a problem while executing the command")
                         if args["subcmd"] == ConsoleParser.SaveGameSubcommand.LIST:
                             if self.curr_game_list is not None:
                                 
-                                logging.info("Savegames:")
+                                CMD_LOGGER.info("Savegames:")
                                 
                                 for gi in self.curr_game_list.gameList:
-                                    logging.info(f"    - {gi.name} [{gi.date}]  Creative: {gi.bHasBeenFlaggedAsCreativeModeSave}")
+                                    CMD_LOGGER.info(f"    - {gi.name} [{gi.date}]  Creative: {gi.bHasBeenFlaggedAsCreativeModeSave}")
                             else:
-                                logging.info("Savegame information not available right now")
+                                CMD_LOGGER.info("Savegame information not available right now")
                     
                     # Send notification event after executing command
                     self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"], server_version=self.build_version)
                 except Exception as e:
-                    logging.error(f"Error occured while executing command: {str(e)}")
+                    LOGGER.error(f"Error occured while executing command: {str(e)}")
         
         # Kill remaining wine processes
         self.kill()
@@ -702,7 +706,7 @@ class AstroDedicatedServer:
             Start the dedicated server process and wait for it to be registered to playfab
         """
         
-        logging.info("Preparing to start the Dedicated Server...")
+        LOGGER.info("Preparing to start the Dedicated Server...")
         
         ip_port_combo = f"{self.ds_config.PublicIP}:{self.engine_config.Port}"
         
@@ -716,19 +720,19 @@ class AstroDedicatedServer:
         try:
             self.start_process()
         except Exception as e:
-            logging.error(f"Could not start Dedicated Server process: {str(e)}")
+            LOGGER.error(f"Could not start Dedicated Server process: {str(e)}")
             return False
         
         self.build_version = read_build_version(self.astro_path)
         
         # If process has exited immediately, something went wrong
         if self.process.poll() is not None:
-            logging.error("Dedicated Server process died immediately")
+            LOGGER.error("Dedicated Server process died immediately")
             return False
         
         self.status = ServerStatus.STARTING
         
-        logging.info(f"Started Dedicated Server process (v{str(self.build_version)}). Waiting for registration...")
+        LOGGER.info(f"Started Dedicated Server process (v{str(self.build_version)}). Waiting for registration...")
         
         wait_time = self.launcher.config.PlayfabAPIInterval
         
@@ -743,7 +747,7 @@ class AstroDedicatedServer:
                         break
                     else:
                         line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
-                        logging.debug(f"[AstroDS] {line}")
+                        LOGGER.debug(f"[AstroDS] {line}")
                 
                 # Try to connect to RCON early to support shutdown command
                 if not self.rcon.connected:
@@ -751,7 +755,7 @@ class AstroDedicatedServer:
                     
                     # After connecting, toggle whiltelist quickly
                     if conn:
-                        logging.debug("Connected to RCON")
+                        LOGGER.debug("Connected to RCON")
                         self.quick_toggle_whitelist()
                 
                 try:
@@ -784,11 +788,11 @@ class AstroDedicatedServer:
                         if (proc_code == 0) and (self.status == ServerStatus.STOPPING):
                             return False
                         
-                        logging.error("Server was forcefully closed before registration")
+                        LOGGER.error("Server was forcefully closed before registration")
                         return False
                 except:
                     # kept from AstroLauncher
-                    logging.debug("Checking for registration failed. Probably rate limit, Backing off and trying again...")
+                    LOGGER.debug("Checking for registration failed. Probably rate limit, Backing off and trying again...")
                     
                     # If Playfab API wait time is below 30 seconds, increase it by one
                     if self.launcher.config.PlayfabAPIInterval < 30:
@@ -801,7 +805,7 @@ class AstroDedicatedServer:
         done_time = time.time()
         elapsed = done_time - start_time
         
-        logging.info(f"Dedicated Server ready! Took {round(elapsed, 2)} seconds to register")
+        LOGGER.info(f"Dedicated Server ready! Took {round(elapsed, 2)} seconds to register")
         
         self.status = ServerStatus.RUNNING
         
@@ -812,13 +816,13 @@ class AstroDedicatedServer:
     def start_process(self):
         """ Start the server process and set the status to RUNNING """
         
-        logging.debug("Starting Dedicated Server process...")
+        LOGGER.debug("Starting Dedicated Server process...")
         
         cmd = [self.wine_exec, path.join(self.astro_path, "AstroServer.exe"), "-log"]
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
-        logging.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.wine_pfx}'...")
+        LOGGER.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.wine_pfx}'...")
         
         self.process = subprocess.Popen(cmd, env=env, cwd=self.astro_path, stderr=subprocess.PIPE, bufsize=1, close_fds=True, text=True)
         
@@ -829,7 +833,7 @@ class AstroDedicatedServer:
                     queue.put(line)
                 out.close()
             except Exception as e:
-                logging.error(f"Error in output thread: {str(e)}")
+                LOGGER.error(f"Error in output thread: {str(e)}")
         
         self.process_out_thread = ProcessOutputThread(self.process.stderr, self.process_out_queue)
         self.process_out_thread.start()
@@ -847,13 +851,13 @@ class AstroDedicatedServer:
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
-        logging.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.wine_pfx}'...")
+        LOGGER.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.wine_pfx}'...")
         
         process = subprocess.Popen(cmd, env=env)
         try:
             process.wait(timeout=15)
         except subprocess.TimeoutExpired:
-            logging.warning("Server took longer than 15 seconds to kill, killing wineserver")
+            LOGGER.warning("Server took longer than 15 seconds to kill, killing wineserver")
             process.kill()
         
         self.status = ServerStatus.OFF
@@ -990,13 +994,13 @@ class AstroDedicatedServer:
             player_info = self.get_player_info(name=name, guid=guid)
             
             if player_info is None:
-                logging.warning("Unknown Player")
+                LOGGER.warning("Unknown Player")
                 return False
             
             res = self.rcon.DSKickPlayerGuid(player_info.playerGuid)
         
         if not isinstance(res, bytes):
-            logging.warning("Error while executing command")
+            LOGGER.warning("Error while executing command")
             return False
         
         res = res.decode()
@@ -1004,9 +1008,9 @@ class AstroDedicatedServer:
         
         if success:
             if force:
-                logging.info(f"Kicked Player with GUID '{guid}'")
+                LOGGER.info(f"Kicked Player with GUID '{guid}'")
             else:
-                logging.info(f"Kicked Player '{player_info.playerName}'")
+                LOGGER.info(f"Kicked Player '{player_info.playerName}'")
                 
             return True
         else:
@@ -1125,8 +1129,8 @@ class AstroDedicatedServer:
         """
         
         # Prevent people from using this
-        logging.warning("Starting a new save game has been disabled currently due to the dedicated server crashing under wine while performing the operation")
-        logging.warning("Please create new games from inside the game")
+        LOGGER.warning("Starting a new save game has been disabled currently due to the dedicated server crashing under wine while performing the operation")
+        LOGGER.warning("Please create new games from inside the game")
         return False
         
         if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
@@ -1167,14 +1171,14 @@ class AstroDedicatedServer:
             # While getting XAuth wasn't successful, retry
             while XAuth is None:
                 if tries <= 0:
-                    logging.error("Unable to get XAuth token after aeveral tries.  Are you connected to the internet?")
+                    LOGGER.error("Unable to get XAuth token after aeveral tries.  Are you connected to the internet?")
                     raise TimeoutError("Gave up after several tries while generating XAuth token")
                 
                 try:
-                    logging.debug("Generating new XAuth...")
+                    LOGGER.debug("Generating new XAuth...")
                     XAuth = playfab.generate_XAuth(self.ds_config.ServerGuid)
                 except Exception as e:
-                    logging.debug("Error while generating XAuth: " + str(e))
+                    LOGGER.debug("Error while generating XAuth: " + str(e))
                     
                     # If not successful, wait 10 seconds
                     time.sleep(10)
@@ -1205,17 +1209,17 @@ class AstroDedicatedServer:
         registered_servers = response["data"]["Games"]
         
         if len(registered_servers) > 0:
-            logging.debug(f"Trying to deregister {len(registered_servers)} servers with maching IP-Port-combination from Playfab...")
+            LOGGER.debug(f"Trying to deregister {len(registered_servers)} servers with maching IP-Port-combination from Playfab...")
             
             for i, srv in enumerate(registered_servers):
-                logging.debug(f"Deregistering server {i} with LobbyID {srv['LobbyID']}...")
+                LOGGER.debug(f"Deregistering server {i} with LobbyID {srv['LobbyID']}...")
                 
                 response = playfab.deregister_server(srv["LobbyID"], self.curr_xauth)
                 
                 if ("status" in response) and (response["status"] != "OK"):
-                    logging.warning(f"Problems while deregistering server {i}. It may still be registered!")
+                    LOGGER.warning(f"Problems while deregistering server {i}. It may still be registered!")
             
-            logging.debug("Finished deregistration")
+            LOGGER.debug("Finished deregistration")
             
             # AstroLauncher has this for some reason, so keep it for now
             time.sleep(1)
@@ -1239,11 +1243,11 @@ class AstroDedicatedServer:
         cp_free = not is_port_in_use(self.ds_config.ConsolePort)
         
         if not sp_free:
-            logging.error(f"Server Port ({self.engine_config.Port}) already in use by different process")
+            LOGGER.error(f"Server Port ({self.engine_config.Port}) already in use by different process")
             return False
         
         if not cp_free:
-            logging.error(f"Console Port ({self.ds_config.ConsolePort}) already in use by different process")
+            LOGGER.error(f"Console Port ({self.ds_config.ConsolePort}) already in use by different process")
             return False
         
         return True
