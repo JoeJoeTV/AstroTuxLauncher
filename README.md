@@ -14,7 +14,7 @@ Launcher and management utility for running an Astroneer Dedicated Server on Lin
 
 1. Clone the repository
     ```sh
-    git clone <insert repository url>
+    git clone https://github.com/JoeJoeTV/AstroTuxLauncher
     ```
 2. Change into repository directory
     ```sh
