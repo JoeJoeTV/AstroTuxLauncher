@@ -745,6 +745,15 @@ class AstroDedicatedServer:
                         line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
                         logging.debug(f"[AstroDS] {line}")
                 
+                # Try to connect to RCON early to support shutdown command
+                if not self.rcon.connected:
+                    conn = self.rcon.ensureConnection()
+                    
+                    # After connecting, toggle whiltelist quickly
+                    if conn:
+                        logging.debug("Connected to RCON")
+                        self.quick_toggle_whitelist()
+                
                 try:
                     # Request registration status
                     response = playfab.get_server(ip_port_combo, self.curr_xauth)
@@ -770,8 +779,12 @@ class AstroDedicatedServer:
                             self.registered = True
                             self.lobby_id = registered_servers[0]["LobbyID"]
                     
-                    if self.process.poll() is not None:
-                        logging.error("Server was closed before registration")
+                    proc_code = self.process.poll()
+                    if proc_code is not None:
+                        if (proc_code == 0) and (self.status == ServerStatus.STOPPING):
+                            return False
+                        
+                        logging.error("Server was forcefully closed before registration")
                         return False
                 except:
                     # kept from AstroLauncher
@@ -867,7 +880,7 @@ class AstroDedicatedServer:
             Also clears the current server information and sets the status to STOPPING.
         """
         
-        if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
+        if not self.rcon.connected:
             return False
         
         self.launcher.notifications.send_event(EventType.SHUTDOWN, server_version=self.build_version)

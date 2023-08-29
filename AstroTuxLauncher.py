@@ -448,7 +448,8 @@ class AstroTuxLauncher():
         
         # Prepare and start dedicated server
         try:
-            self.dedicatedserver.start()
+            if not self.dedicatedserver.start():
+                return
         except Exception as e:
             logging.error(f"There as an error while starting the Dedicated Server: {str(e)}")
             self.exit(reason="Error while starting Dedicated Server")
@@ -471,13 +472,20 @@ class AstroTuxLauncher():
             else:
                 logging.info("Quitting gracefully...")
             
-            if self.dedicatedserver and self.dedicatedserver.status == ServerStatus.RUNNING:
+            if self.dedicatedserver and self.dedicatedserver.status in [ServerStatus.RUNNING, ServerStatus.STARTING]:
+                # If no RCON is connected while running or starting, simply kill server
+                if not self.dedicatedserver.rcon.connected:
+                    self.dedicatedserver.kill()
+                    return
+                
                 # If server is running, simply shut it down and return to let it finish normally
+                logging.debug("Shutting down Dedicated Server before quitting...")
                 self.dedicatedserver.shutdown()
                 return
             else:
                 # If no server is running, exit directly
                 logging.info("Goodbye!")
+                logging.debug("Quitting with exit code 0...")
                 sys.exit(0)
         else:
             if reason:
