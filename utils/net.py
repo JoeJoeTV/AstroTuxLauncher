@@ -80,7 +80,7 @@ def post_request(url, headers={}, jsonData={}, timeout=5):
     return response
 
 def get_public_ip():
-    logging.debug("Getting IP from remote service")
+    logging.info("Getting IP from remote service")
     url = "https://api.ipify.org?format=json"
     x = json.load(get_request(url))
     logging.debug(f"Received data: {json.dumps(x)}")
@@ -171,8 +171,6 @@ def secret_socket_server(port, secret, tcp):
                     
                     return False
     except Exception as e:
-        logging.error(f"Error during receiving: {str(e)}")
-        logging.error(traceback.format_exc())
         return False
     finally:
         server_socket.close()

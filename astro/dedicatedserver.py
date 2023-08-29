@@ -194,13 +194,13 @@ class DedicatedServerConfig:
         # If requested or IP is invalid, replace with public IP gotten from online service
         if overwrite_ip or not ip_valid:
             try:
-                logging.info("Overwriting PublicIP field in Dedicated Server config")
+                logging.info("Overwriting PublicIP field in Dedicated Server config...")
                 config.PublicIP = net.get_public_ip()
-            except:
+            except Exception as e:
                 if ip_valid:
-                    logging.warn("Could not update PublicIP field")
+                    logging.warn(f"Could not update PublicIP field: {str(e)}")
                 else:
-                    logging.error("Could not update PublicIP field")
+                    logging.error(f"Could not update PublicIP field: {str(e)}")
         
         # Write config back to file to add missing entried and remove superflous ones
         # In the case of the file not existing prior, it will be created
@@ -399,6 +399,9 @@ class AstroDedicatedServer:
         self.ds_config = DedicatedServerConfig.ensure_config(ds_config_path, self.launcher.config.OverwritePublicIP)
         self.engine_config = EngineConfig.ensure_config(engine_config_path, self.launcher.config.DisableEncryption)
         
+        logging.debug(f"Dedicated Server configuration (including overrides):\n{json.dumps(self.ds_config.to_dict(encode_json=True), indent=4)}")
+        logging.debug(f"Engine configuration (including overrides):\n{json.dumps(self.engine_config.to_dict(encode_json=True), indent=4)}")
+        
         # RCON
         self.rcon = AstroRCON(self.ds_config.ConsolePort, self.ds_config.ConsolePassword)
         
@@ -464,7 +467,7 @@ class AstroDedicatedServer:
                         break
                     else:
                         line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
-                        logging.debug(f"(DS) {line}")
+                        logging.debug(f"[AstroDS] {line}")
             
             # If not connected to RCON, skip following code as it requires RCON
             if not self.rcon.connected:
@@ -715,7 +718,7 @@ class AstroDedicatedServer:
         
         self.status = ServerStatus.STARTING
         
-        logging.debug(f"Started Dedicated Server process (v{str(self.build_version)}). Waiting for registration...")
+        logging.info(f"Started Dedicated Server process (v{str(self.build_version)}). Waiting for registration...")
         
         wait_time = self.launcher.config.PlayfabAPIInterval
         
@@ -792,6 +795,8 @@ class AstroDedicatedServer:
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
+        logging.debug(f"Executing command: {' '.join(cmd)} in WINE prefix '{self.wine_pfx}'...")
+        
         self.process = subprocess.Popen(cmd, env=env, cwd=self.astro_path, stderr=subprocess.PIPE, bufsize=1, close_fds=True, text=True)
         
         def enqueue_output(out, queue):
@@ -818,6 +823,8 @@ class AstroDedicatedServer:
         cmd = [self.wineserver_exec, "-k", "-w"]
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
+        
+        logging.debug(f"Executing command: {' '.join(cmd)} in WINE prefix '{self.wine_pfx}'...")
         
         process = subprocess.Popen(cmd, env=env)
         try:
