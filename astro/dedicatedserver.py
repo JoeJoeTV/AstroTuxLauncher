@@ -455,6 +455,9 @@ class AstroDedicatedServer:
                     logging.info("Dedicated Server shut down gracefully")
                     break
                 
+                if proc_status != 0:
+                    self.launcher.notifications.send_event(EventType.CRASH, server_version=self.build_version)
+                
                 # Server process has exited
                 logging.debug(f"Server process closed with exit code {proc_status}")
                 break
@@ -531,7 +534,7 @@ class AstroDedicatedServer:
                                 player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
                                 
                                 for info in player_diff:
-                                    self.launcher.notifications.send_event(EventType.PLAYER_JOIN, player_name=info["name"], player_guid=info["guid"])
+                                    self.launcher.notifications.send_event(EventType.PLAYER_JOIN, player_name=info["name"], player_guid=info["guid"], server_version=self.build_version)
                                     
                                     #TODO: Maybe set players to pending with command and refresh config file
 
@@ -545,7 +548,7 @@ class AstroDedicatedServer:
                                 player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
                                 
                                 for info in player_diff:
-                                    self.launcher.notifications.send_event(EventType.PLAYER_LEAVE, player_name=info["name"], player_guid=info["guid"])
+                                    self.launcher.notifications.send_event(EventType.PLAYER_LEAVE, player_name=info["name"], player_guid=info["guid"], server_version=self.build_version)
                         
                         # Get current savegame information
                         active_save_name = self.curr_game_list.activeSaveName
@@ -558,11 +561,11 @@ class AstroDedicatedServer:
                         
                         # If active save names are different, the server changed savegame
                         if active_save_name != prev_active_save_name:
-                            self.launcher.notifications.send_event(EventType.SAVEGAME_CHANGE, savegame_name=active_save_name)
+                            self.launcher.notifications.send_event(EventType.SAVEGAME_CHANGE, savegame_name=active_save_name, server_version=self.build_version)
                         else:
                             # If save was not changed, check if server saved the game
                             if active_save_time != prev_active_save_time:
-                                self.launcher.notifications.send_event(EventType.SAVE, savegame_name=active_save_name)
+                                self.launcher.notifications.send_event(EventType.SAVE, savegame_name=active_save_name, server_version=self.build_version)
                 except Exception as e:
                     logging.debug(f"Error while doing status update: {str(e)}")
                     logging.error(traceback.format_exc())
@@ -678,7 +681,7 @@ class AstroDedicatedServer:
                                 logging.info("Savegame information not available right now")
                     
                     # Send notification event after executing command
-                    self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"])
+                    self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"], server_version=self.build_version)
                 except Exception as e:
                     logging.error(f"Error occured while executing command: {str(e)}")
         
@@ -782,7 +785,7 @@ class AstroDedicatedServer:
         
         self.status = ServerStatus.RUNNING
         
-        self.launcher.notifications.send_event(EventType.START)
+        self.launcher.notifications.send_event(EventType.START, server_version=self.build_version)
         
         return True
     
@@ -860,7 +863,7 @@ class AstroDedicatedServer:
         if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
             return False
         
-        logging.info("Shutting down Dedicated Server...")
+        self.launcher.notifications.send_event(EventType.SHUTDOWN, server_version=self.build_version)
         
         res = self.rcon.DSServerShutdown()
         

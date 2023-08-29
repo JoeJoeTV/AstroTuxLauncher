@@ -9,7 +9,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config
 from typing import Optional
-from utils.misc import ExcludeIfNone, read_build_version
+from utils.misc import ExcludeIfNone, read_build_version, LAUNCHER_VERSION
 from utils.termutils import set_window_title
 from enum import Enum
 from pansi import ansi
@@ -49,7 +49,6 @@ BANNER_TEXT="Unofficial Astroneer Dedicated Server Launcher for Linux"
 #   Constants
 #
 
-VERSION = "0.0.1"
 NAME = "AstroTuxLauncher"
 
 HELP_COMMAND = f"""What {NAME} should do
@@ -91,13 +90,14 @@ class DiscordConfig:
 @dataclass
 class NTFYConfig:
     topic: str = None
-    server: str = "https://ntfy.sh"
+    serverURL: str = "https://ntfy.sh"
 
 @dataclass
 class NotificationConfig:
     method: NotificationMethod = NotificationMethod.NONE
+    name: str = "Astroneer Dedicated Server"
     
-    dicsord: Optional[DiscordConfig] =  field(metadata=config(exclude=ExcludeIfNone), default=None)
+    discord: Optional[DiscordConfig] =  field(metadata=config(exclude=ExcludeIfNone), default=None)
     ntfy: Optional[NTFYConfig] =  field(metadata=config(exclude=ExcludeIfNone), default=None)
 
 @dataclass_json
@@ -243,10 +243,19 @@ class AstroTuxLauncher():
         self.notifications = interface.NotificationManager()
         
         self.notifications.add_handler(interface.LoggingNotificationHandler())
-        #TODO: Initialize Webhook handlers
+        
+        if self.config.notifications.method == NotificationMethod.DISCORD:
+            if self.config.notifications.discord.webhookURL:
+                self.notifications.add_handler(interface.DiscordNotificationHandler(self.config.notifications.discord.webhookURL, name=self.config.notifications.name))
+            else:
+                logging.warning("Discord Webhook URL is not set in config, not sending Discord notifications")
+        elif self.config.notifications.method == NotificationMethod.NTFY:
+            if self.config.notifications.ntfy.topic:
+                self.notifications.add_handler(interface.NTFYNotificationHandler(self.config.notifications.ntfy.topic, ntfy_url=self.config.notifications.ntfy.serverURL, name=self.config.notifications.name))
+            else:
+                logging.warning("ntfy topic is not set in config, not sending ntfy notifications")
         
         # Create Dedicated Server object
-        #TODO: Maybe move to stert_server
         self.dedicatedserver = AstroDedicatedServer(self)
     
     def check_ds_executable(self):
@@ -499,7 +508,7 @@ if __name__ == "__main__":
     print(BANNER_SUBTITLE)
     print("")
     print(BANNER_TEXT)
-    print(f"v{VERSION}")
+    print(f"v{LAUNCHER_VERSION}")
     print("")
     
     try:
@@ -522,6 +531,9 @@ if __name__ == "__main__":
         try:
             launcher.start_server()
         except Exception as e:
-            launcher.exit(graceful=False, reason=f"Exception occured: {str(e)}")
+            if launcher.dedicatedserver:
+                launcher.dedicatedserver.kill()
+            
+            raise
     
     logging.info("Goodbye!")

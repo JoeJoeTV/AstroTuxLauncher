@@ -7,11 +7,14 @@ import logging
 import colorlog
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import argparse
 import re
 import subprocess
 from alive_progress.animations.spinners import frame_spinner_factory
+from utils.misc import LAUNCHER_VERSION
+import utils.net as net
+import json
 
 DOTS_SPINNER = frame_spinner_factory("⣷⣯⣟⡿⢿⣻⣽⣾")
 
@@ -558,7 +561,7 @@ class NotificationManager:
             handler.send_event(event_type, **params)
 
 
-def safeformat(str, **kwargs):
+def safeformat(string, keep_escape=True, **kwargs):
     """
         Formats the passed string {str} using the given keyword arguments, while keeping missing replacements unformatted
     """
@@ -569,13 +572,17 @@ def safeformat(str, **kwargs):
         
     replacements = SafeDict(**kwargs)
     
-    return str.format_map(replacements)
+    # Keep escaped strings
+    if keep_escape:
+        string = string.replace("{{", "{{{{").replace("}}", "}}}}")
+    
+    return string.format_map(replacements)
 
 DEFAULT_EVENT_FORMATS = {
         EventType.MESSAGE           : "{message}",
         EventType.START             : "Server started!",
         EventType.REGISTERED        : "Server registered with Playfab!",
-        EventType.SHUTDOWN          : "Server shutdown!",
+        EventType.SHUTDOWN          : "Server shutting down...",
         EventType.CRASH             : "Server crashed!",
         EventType.PLAYER_JOIN       : "Player '{player_name}'({player_guid}) joined the game",
         EventType.PLAYER_LEAVE      : "Player '{player_name}'({player_guid}) left the game",
@@ -660,12 +667,20 @@ class QueuedNotificationHandler(NotificationHandler):
     def __init__(self, name="Server", event_whitelist=set([e for e in EventType]), event_formats=DEFAULT_EVENT_FORMATS):
         super().__init__(name, event_whitelist, event_formats)
         
-        self.thread = QueuedNotificationHandler.NotificationThread(self._handle_message)
+        self.thread = QueuedNotificationHandler.NotificationThread(self._send_message)
+    
+    def send_event(self, event_type=EventType.MESSAGE, **params):
+        """ Send event using the provided parameters """
+        
+        # Only send, if event is in whitelist
+        if event_type in self.whitelist:
+            # Add server name to parameters for formatting
+            params["name"] = self.name
+            message = safeformat(self.formats[event_type], **params)
+            
+            self.thread.add_event(event_type, message)
     
     def _send_message(self, event_type, message):
-        self.thread.add_event(event_type, message)
-    
-    def _handle_message(self, event_type, message):
         """
             Method for handling events asynchronously.
             To be overritten by subclasses.
@@ -687,6 +702,18 @@ DEFAULT_LEVEL_MAPPING = {
         EventType.SAVEGAME_CHANGE   : logging.INFO
     }
 
+LOGGING_DEFAULT_EVENT_WHITELIST = set([
+        EventType.MESSAGE,
+        EventType.START,
+        EventType.REGISTERED,
+        EventType.SHUTDOWN,
+        EventType.CRASH,
+        EventType.PLAYER_JOIN,
+        EventType.PLAYER_LEAVE,
+        EventType.SAVE,
+        EventType.SAVEGAME_CHANGE
+])
+
 class LoggingNotificationHandler(NotificationHandler):
     """
         Notification handler that logs events using the logging module
@@ -698,7 +725,7 @@ class LoggingNotificationHandler(NotificationHandler):
             - level_mapping: Mapping from EventType to a logging level
     """
     
-    def __init__(self, name="Server", event_whitelist=set([e for e in EventType]), event_formats=DEFAULT_EVENT_FORMATS, level_mapping=DEFAULT_LEVEL_MAPPING):
+    def __init__(self, name="Server", event_whitelist=LOGGING_DEFAULT_EVENT_WHITELIST, event_formats=DEFAULT_EVENT_FORMATS, level_mapping=DEFAULT_LEVEL_MAPPING):
         super().__init__(name, event_whitelist, event_formats)
         
         self.level_mapping = level_mapping
@@ -708,23 +735,153 @@ class LoggingNotificationHandler(NotificationHandler):
         
         logging.log(level, message)
 
+DISCORD_MESSAGE_TEMPLATE = """{{
+    "content": null,
+    "embeds": [
+        {{
+            "title": ":{emoji}: {message}",
+            "color": {color},
+            "fields": [
+                {{
+                    "name": "Event",
+                    "value": "{event_type}",
+                    "inline": true
+                }},
+                {{
+                    "name": "Version",
+                    "value": "{server_version}",
+                    "inline": true
+                }}
+            ],
+            "author": {{
+                "name": "Server Notification"
+            }},
+            "footer": {{
+                "text": "AstroTuxLauncher v{launcher_version}"
+            }},
+            "timestamp": "{timestamp}"
+        }}
+    ],
+    "username": "{name}",
+    "avatar_url": "https://astroneer.wiki.gg/images/7/74/Icon_Astroneer.png",
+    "attachments": [],
+    "flags": 4096
+}}"""
+
+DISCORD_HEADERS = {
+    'content-type': 'application/json; charset=utf-8',
+    'User-Agent': f"AstroTuxLauncher/{LAUNCHER_VERSION}",
+    'Accept': 'application/json'
+}
+
+DISCORD_EVENT_EXTRA_MAPPING = {
+    EventType.MESSAGE           : {"color": 10526880,   "emoji": "information_source"},
+    EventType.START             : {"color": 3256064,    "emoji": "green_square"},
+    EventType.REGISTERED        : {"color": 10526880,   "emoji": "white_check_mark"},
+    EventType.SHUTDOWN          : {"color": 14440960,   "emoji": "orange_square"},
+    EventType.CRASH             : {"color": 13764616,   "emoji": "red_square"},
+    EventType.PLAYER_JOIN       : {"color": 41160,      "emoji": "inbox_tray"},
+    EventType.PLAYER_LEAVE      : {"color": 6553800,    "emoji": "outbox_tray"},
+    EventType.COMMAND           : {"color": 15118080,   "emoji": "wrench"},
+    EventType.SAVE              : {"color": 7274240,    "emoji": "file_cabinet"},
+    EventType.SAVEGAME_CHANGE   : {"color": 15118080,   "emoji": "dividers"}
+}
+
 class DiscordNotificationHandler(QueuedNotificationHandler):
     """
         Queued Notification handler that sends event messages to a discord webhook
     """
     
-    #TODO: Finish
+    def __init__(self, webhook_url, name="Server", event_whitelist=set([e for e in EventType]), event_formats=DEFAULT_EVENT_FORMATS, extra_formats=DISCORD_EVENT_EXTRA_MAPPING):
+        self.webhook_url = webhook_url
+        self.extra_mapping = extra_formats
+        
+        # This is to prevent overriding default constants
+        event_formats = event_formats.copy()
+        
+        # Add message formats to Discord Message template
+        for et in EventType:
+            event_formats[et] = safeformat(DISCORD_MESSAGE_TEMPLATE, message=event_formats[et])
+        
+        super().__init__(name, event_whitelist, event_formats)
     
-    pass
+    def _send_message(self, event_type, message):
+        extra = self.extra_mapping[event_type]
+        
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        
+        message_json = safeformat(message, keep_escape=False, event_type=event_type.value, color=extra["color"], emoji=extra["emoji"], launcher_version=LAUNCHER_VERSION, timestamp=timestamp)
+        
+        # Normalize JSON
+        message_json = json.loads(message_json)
+        
+        try:
+            resp = net.post_request(self.webhook_url, headers=DISCORD_HEADERS, jsonData=message_json)
+        except Exception as e:
+            logging.error(f"Error while sending Discord notification: {str(e)}")
+
+NTFY_MESSAGE_TEMPLATE = """{{
+    "topic": "{topic}",
+    "message": "{name}",
+    "title": "{message}",
+    "tags": [
+        "{emoji}",
+        "{event_type}",
+        "AstroTuxLauncher"
+    ],
+    "priority": {priority}
+}}"""
+
+NTFY_HEADERS = {
+    'content-type': 'application/json; charset=utf-8',
+    'User-Agent': f"AstroTuxLauncher/{LAUNCHER_VERSION}",
+    'Accept': 'application/json'
+}
+
+NTFY_EVENT_EXTRA_MAPPING = {
+    EventType.MESSAGE           : {"priority": 3, "emoji": "information_source"},
+    EventType.START             : {"priority": 4, "emoji": "green_square"},
+    EventType.REGISTERED        : {"priority": 3, "emoji": "white_check_mark"},
+    EventType.SHUTDOWN          : {"priority": 4, "emoji": "orange_square"},
+    EventType.CRASH             : {"priority": 5, "emoji": "red_square"},
+    EventType.PLAYER_JOIN       : {"priority": 3, "emoji": "inbox_tray"},
+    EventType.PLAYER_LEAVE      : {"priority": 3, "emoji": "outbox_tray"},
+    EventType.COMMAND           : {"priority": 4, "emoji": "wrench"},
+    EventType.SAVE              : {"priority": 3, "emoji": "file_cabinet"},
+    EventType.SAVEGAME_CHANGE   : {"priority": 3, "emoji": "card_index_dividers"}
+}
 
 class NTFYNotificationHandler(QueuedNotificationHandler):
     """
         Queued Notificationm handler that sends event messages to an ntfy instance
     """
     
-    #TODO: Finish
+    def __init__(self, topic, ntfy_url="https://ntfy.sh", name="Server", event_whitelist=set([e for e in EventType]), event_formats=DEFAULT_EVENT_FORMATS, extra_formats=NTFY_EVENT_EXTRA_MAPPING):
+        self.topic = topic
+        self.ntfy_url = ntfy_url
+        self.extra_mapping = extra_formats
+        
+        # This is to prevent overriding default constants
+        event_formats = event_formats.copy()
+        
+        # Add message formats to Discord Message template
+        for et in EventType:
+            event_formats[et] = safeformat(NTFY_MESSAGE_TEMPLATE, message=event_formats[et], topic=self.topic)
+        
+        super().__init__(name, event_whitelist, event_formats)
     
-    pass
+    def _send_message(self, event_type, message):
+        extra = self.extra_mapping[event_type]
+        
+        message_json = safeformat(message, keep_escape=False, event_type=event_type.value, priority=extra["priority"], emoji=extra["emoji"])
+        
+        # Normalize JSON
+        message_json = json.loads(message_json)
+        
+        try:
+            resp = net.post_request(self.ntfy_url, headers=NTFY_HEADERS, jsonData=message_json)
+        except Exception as e:
+            logging.error(f"Error while sending ntfy notification: {str(e)}")
 
 #
 #   Miscellaneous
