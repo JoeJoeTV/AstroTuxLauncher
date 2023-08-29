@@ -795,7 +795,7 @@ class AstroDedicatedServer:
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
-        logging.debug(f"Executing command: {' '.join(cmd)} in WINE prefix '{self.wine_pfx}'...")
+        logging.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.wine_pfx}'...")
         
         self.process = subprocess.Popen(cmd, env=env, cwd=self.astro_path, stderr=subprocess.PIPE, bufsize=1, close_fds=True, text=True)
         
@@ -824,7 +824,7 @@ class AstroDedicatedServer:
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
-        logging.debug(f"Executing command: {' '.join(cmd)} in WINE prefix '{self.wine_pfx}'...")
+        logging.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.wine_pfx}'...")
         
         process = subprocess.Popen(cmd, env=env)
         try:

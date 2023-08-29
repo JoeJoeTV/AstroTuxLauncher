@@ -291,7 +291,7 @@ class AstroTuxLauncher():
         env["WINEPREFIX"] = self.config.WinePrefixPath
         env["WINEDEBUG"] = "-all"
         
-        logging.debug(f"Executing command: {' '.join(cmd)} in WINE prefix '{self.config.WinePrefixPath}'...")
+        logging.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.config.WinePrefixPath}'...")
         
         try:
             wineprocess = subprocess.Popen(cmd, env=env, cwd=self.config.AstroServerPath, stderr=subprocess.PIPE, stdout=subprocess.PIPE, close_fds=True)
