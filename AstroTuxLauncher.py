@@ -42,6 +42,9 @@ BANNER_LOGO = f"""{ansi.weight.bold}
 """
 BANNER_SUBTITLE = "L a u n c h e r".center(45)
 
+BANNER_TEXT="Unofficial Astroneer Dedicated Server Launcher for Linux"
+
+
 #
 #   Constants
 #
@@ -116,7 +119,7 @@ class LauncherConfig:
     LogPath: str = "logs"                       # The path where logs should be saved
     
     PlayfabAPIInterval: int = 2                 # Time to wait between Playfab API requests
-    ServerStatusInterval: int = 2               # Time to wait between Server Status checks
+    ServerStatusInterval: float = 3             # Time to wait between Server Status checks
     
     DisableEncryption: bool = True  # Wether to disable encryption for the Astroneer DS. CURRENTLY REQUIRED TO BE "True" FOR HOSTING ON LINUX
         
@@ -480,10 +483,15 @@ if __name__ == "__main__":
     print(BANNER_LOGO, end="")
     print(BANNER_SUBTITLE)
     print("")
-    print("Unofficial Astroneer Dedicated Server Launcher for Linux")
+    print(BANNER_TEXT)
+    print(f"v{VERSION}")
     print("")
     
-    launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec)
+    try:
+        launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec)
+    except KeyboardInterrupt:
+        print("Quitting... (requested by user)")
+        sys.exit(0)
     
     signal.signal(signal.SIGINT, launcher.user_exit)
     

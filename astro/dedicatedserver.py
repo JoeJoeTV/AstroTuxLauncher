@@ -19,10 +19,13 @@ import subprocess
 import pathvalidate
 import time
 import astro.playfab as playfab
-from utils.interface import EventType, ConsoleParser
+from utils.interface import EventType, ConsoleParser, ProcessOutputThread
 import psutil
 from enum import Enum
 import socket
+import traceback
+from queue import Queue, Empty
+import threading
 
 #
 #   Configuration
@@ -380,11 +383,13 @@ class AstroDedicatedServer:
         self.wineserver_exec = self.launcher.wineserverexec
         self.wine_pfx = self.launcher.config.WinePrefixPath
         
-        #TODO: Initialize to dataclasses with empty lists
         # Variables for storing data received from server
         self.curr_server_stat = None
         self.curr_player_list = None
         self.curr_game_list = None
+        
+        # Stores the time the last status update was performed
+        self.last_server_status = None
         
         # Load configuration
         ds_config_path = path.join(self.astro_path, ASTRO_DS_CONFIG_PATH, "AstroServerSettings.ini")
@@ -395,7 +400,11 @@ class AstroDedicatedServer:
         
         # RCON
         self.rcon = AstroRCON(self.ds_config.ConsolePort, self.ds_config.ConsolePassword)
+        
+        # DS Process related
         self.process = None
+        self.process_out_queue = Queue()
+        self.process_out_thread = None
         
         # XAuth for playfab API
         self.curr_xauth = None
@@ -444,102 +453,126 @@ class AstroDedicatedServer:
                 # Server process has exited
                 logging.debug(f"Server process closed with exit code {proc_status}")
                 break
+            else:
+                # Print all lines currently in process output queue
+                while True:
+                    try:
+                        line = self.process_out_queue.get_nowait()
+                    except Empty:
+                        break
+                    else:
+                        line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
+                        logging.debug(f"(DS) {line}")
+            
+            # If not connected to RCON, skip following code as it requires RCON
+            if not self.rcon.connected:
+                logging("RCON is not connected, skipping related functionality")
+                time.sleep(self.launcher.config.ServerStatusInterval)
+                continue
+            
+            update_server_data = False
+            
+            if self.last_server_status is None:
+                logging.debug("Doing initial Server status data update")
+                
+                # If we haven't requested any data yet, do it now
+                update_server_data = False
+                if self.update_server_info():
+                    self.last_server_status = time.time()
+                else:
+                    logging.warning("Getting information from Dedicated Server failed!")
+                
+            elif (time.time() - self.last_server_status) >= self.launcher.config.ServerStatusInterval:
+                # If the time interval since the last status update is big wnough, do another one
+                update_server_data = True
             
             # Ensure XAuth is present
-            self.get_XAuth()
+            if update_server_data:
+                self.get_XAuth()
             
             #TODO: Get info from Playfab API
             
-            # Save player list before updating
-            if self.curr_player_list:
-                prev_online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
-                prev_online_player_guids = [pi.playerGuid for pi in prev_online_players]
-            else:
-                prev_online_players = []
-                prev_online_player_guids = []
+            #
+            # Update Server status data and compare to previous data
+            # to get joined and left players aswell as savegame changes
+            #
             
-            if self.curr_game_list:
-                prev_active_save_name = self.curr_game_list.activeSaveName
-            else:
-                prev_active_save_name = None
-            
-            if (prev_active_save_name is not None) and (prev_active_save_name != ""):
-                save_date_list = [gi.date for gi in self.curr_game_list.gameList if gi.name == prev_active_save_name]
-                prev_active_save_time = save_date_list[0] if len(save_date_list) > 0 else 0
-            else:
-                prev_active_save_time = 0
-            
-            logging.debug(f"Prev Active SaveGame Name: {prev_active_save_name}")
-            logging.debug(f"Prev Active SaveGame Time: {prev_active_save_time}")
-            
-            # Get information from server via RCON
-            if self.rcon.connected and self.update_server_info():
-                # Current player list
-                if self.curr_player_list:
-                    online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
-                else:
-                    online_players = []
+            if update_server_data and not (self.status == ServerStatus.STOPPING):
+                logging.debug("Updating Server status data...")
                 
-                online_player_guids = [pi.playerGuid for pi in online_players]
-                
-                # If the amount of players now is greater than before the update, players have joined
-                if len(online_players) > len(prev_online_players):
-                    # Get difference of Player GUIDs to find out, who joined
-                    player_diff_guid = list(set(online_player_guids) - set(prev_online_player_guids))
+                try:
+                    prev_online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
+                    prev_online_player_guids = [pi.playerGuid for pi in prev_online_players]
                     
-                    logging.debug(f"Joined GUIDs: {player_diff_guid}")
+                    prev_active_save_name = self.curr_game_list.activeSaveName
                     
-                    # Maybe redundant check
-                    if len(player_diff) > 0:
-                        player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
+                    if (prev_active_save_name is not None) and (prev_active_save_name != ""):
+                        save_date_list = [gi.date for gi in self.curr_game_list.gameList if gi.name == prev_active_save_name]
+                        prev_active_save_time = save_date_list[0] if len(save_date_list) > 0 else 0
+                    else:
+                        prev_active_save_time = 0
+                    
+                    if self.update_server_info():
+                        self.last_server_status = time.time()
                         
-                        logging.debug(f"Joined Infos: {player_diff}")
+                        online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
+                        online_player_guids = [pi.playerGuid for pi in online_players]
                         
-                        for info in player_diff:
-                            self.launcher.notifications.send_event(EventType.PLAYER_JOIN, player_name=info["name"], player_guid=info["guid"])
+                        # If the amount of players now is greater than before the update, players have joined
+                        if len(online_players) > len(prev_online_players):
+                            # Get difference of Player GUIDs to find out, who joined
+                            player_diff_guid = list(set(online_player_guids) - set(prev_online_player_guids))
                             
-                            #TODO: Maybe set players to pending with command and refresh config file
-                
-                # If the amount of players now is smaller than before the update, players have left
-                if len(prev_online_players) > len(online_players):
-                    # Get difference of Player GUIDs to find out, who left
-                    player_diff_guid = list(set(prev_online_player_guids) - set(online_player_guids))
-                    
-                    logging.debug(f"Left GUIDs: {player_diff_guid}")
-                    
-                    # Maybe redundant check
-                    if len(player_diff) > 0:
-                        player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
+                            logging.debug(f"Joined GUIDs: {player_diff_guid}")
+                            
+                            # Maybe redundant check
+                            if len(player_diff) > 0:
+                                player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
+                                
+                                logging.debug(f"Joined Infos: {player_diff}")
+                                
+                                for info in player_diff:
+                                    self.launcher.notifications.send_event(EventType.PLAYER_JOIN, player_name=info["name"], player_guid=info["guid"])
+                                    
+                                    #TODO: Maybe set players to pending with command and refresh config file
+
+                        # If the amount of players now is smaller than before the update, players have left
+                        if len(prev_online_players) > len(online_players):
+                            # Get difference of Player GUIDs to find out, who left
+                            player_diff_guid = list(set(prev_online_player_guids) - set(online_player_guids))
+                            
+                            logging.debug(f"Left GUIDs: {player_diff_guid}")
+                            
+                            # Maybe redundant check
+                            if len(player_diff) > 0:
+                                player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
+                                
+                                logging.debug(f"Left Infos: {player_diff}")
+                                
+                                for info in player_diff:
+                                    self.launcher.notifications.send_event(EventType.PLAYER_LEAVE, player_name=info["name"], player_guid=info["guid"])
                         
-                        logging.debug(f"Left Infos: {player_diff}")
+                        # Get current savegame information
+                        active_save_name = self.curr_game_list.activeSaveName
                         
-                        for info in player_diff:
-                            self.launcher.notifications.send_event(EventType.PLAYER_LEAVE, player_name=info["name"], player_guid=info["guid"])
-                
-                # Get current savegame information
-                if self.curr_game_list:
-                    active_save_name = self.curr_game_list.activeSaveName
-                else:
-                    active_save_name = None
-                
-                if (active_save_name is not None) and (active_save_name != ""):
-                    save_date_list = [gi.date for gi in self.curr_game_list.gameList if gi.name == active_save_name]
-                    active_save_time = save_date_list[0] if len(save_date_list) > 0 else 0
-                else:
-                    active_save_time = 0
-                
-                logging.debug(f"Active SaveGame Name: {active_save_name}")
-                logging.debug(f"Active SaveGame Time: {active_save_time}")
-                
-                # If active save names are different, the server changed savegame
-                if active_save_name != prev_active_save_name:
-                    self.launcher.notifications.send_event(EventType.SAVEGAME_CHANGE, savegame_name=active_save_name)
-                else:
-                    # If save was not changed, check if server saved the game
-                    if active_save_time != prev_active_save_time:
-                        self.launcher.send_event(EventType.SAVE, savegame_name=active_save_name)
+                        if (active_save_name is not None) and (active_save_name != ""):
+                            save_date_list = [gi.date for gi in self.curr_game_list.gameList if gi.name == active_save_name]
+                            active_save_time = save_date_list[0] if len(save_date_list) > 0 else 0
+                        else:
+                            active_save_time = 0
+                        
+                        # If active save names are different, the server changed savegame
+                        if active_save_name != prev_active_save_name:
+                            self.launcher.notifications.send_event(EventType.SAVEGAME_CHANGE, savegame_name=active_save_name)
+                        else:
+                            # If save was not changed, check if server saved the game
+                            if active_save_time != prev_active_save_time:
+                                self.launcher.notifications.send_event(EventType.SAVE, savegame_name=active_save_name)
+                except Exception as e:
+                    logging.debug(f"Error while doing status update: {str(e)}")
+                    logging.error(traceback.format_exc())
             
-            # Handle console commands
+            # Handle console commands in queue
             while not self.launcher.cmd_queue.empty():
                 # break out of loop, if RCON not available
                 if not self.rcon.connected:
@@ -657,8 +690,6 @@ class AstroDedicatedServer:
                                 logging.info("Savegame information not available right now")
                 except Exception as e:
                     logging.error(f"Error occured while executing command: {str(e)}")
-            
-            time.sleep(self.launcher.config.ServerStatusInterval)
         
         # Kill remaining wine processes
         self.kill()
@@ -702,6 +733,17 @@ class AstroDedicatedServer:
         # Wait for DS to finish registration
         while not self.registered:
             try:
+                # Print all lines currently in process output queue
+                while True:
+                    try:
+                        line = self.process_out_queue.get_nowait()
+                    except Empty:
+                        break
+                    else:
+                        line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
+                        logging.debug(f"(DS) {line}")
+                
+                # Request registration status
                 response = playfab.get_server(ip_port_combo, self.curr_xauth)
                 
                 if response["status"] != "OK":
@@ -738,7 +780,7 @@ class AstroDedicatedServer:
         self.launcher.config.PlayfabAPIInterval = wait_time
         
         done_time = time.time()
-        elapsed = start_time - wait_time
+        elapsed = done_time - start_time
         
         logging.info(f"Dedicated Server ready! Took {round(elapsed, 2)} seconds to register")
         
@@ -757,11 +799,28 @@ class AstroDedicatedServer:
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
-        self.process = subprocess.Popen(cmd, env=env, cwd=self.astro_path)
+        self.process = subprocess.Popen(cmd, env=env, cwd=self.astro_path, stderr=subprocess.PIPE, bufsize=1, close_fds=True, text=True)
+        
+        def enqueue_output(out, queue):
+            """ Reads lines from {out} and adds them to {queue} """
+            try:
+                for line in iter(out.readline, b''):
+                    queue.put(line)
+                out.close()
+            except Exception as e:
+                logging.error(f"Error in output thread: {str(e)}")
+        
+        self.process_out_thread = ProcessOutputThread(self.process.stderr, self.process_out_queue)
+        self.process_out_thread.start()
+        
         time.sleep(0.01)
     
     def kill(self):
         """ Kill the Dedicated Server process using wineserver -k """
+        
+        # Stop reading thread
+        if self.process_out_thread:
+            self.process_out_thread.stop()
         
         cmd = [self.wineserver_exec, "-k", "-w"]
         env = os.environ.copy()
