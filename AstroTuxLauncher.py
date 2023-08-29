@@ -165,7 +165,7 @@ class LauncherConfig:
 
 class AstroTuxLauncher():
     
-    def __init__(self, config_path, astro_path, depotdl_exec):
+    def __init__(self, config_path, astro_path, depotdl_exec, force_debug_log=False):
         # Setup basic logging
         interface.LauncherLogging.prepare()
         interface.LauncherLogging.setup_console()
@@ -184,6 +184,10 @@ class AstroTuxLauncher():
         # If cli parameter is specified, it overrides the config value
         if not (astro_path is None):
             self.config = dataclasses.replace(self.config, {"AstroServerPath": astro_path})
+        
+        # If flag was passed, overrule config option
+        if force_debug_log:
+            self.config.LogDebugMessages = True
         
         # Make sure we use absolute paths
         self.config.AstroServerPath = path.abspath(self.config.AstroServerPath)
@@ -507,6 +511,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--config_path", help="The location of the configuration file (default: %(default)s)", type=str, dest="config_path", default="launcher.toml")
     parser.add_argument("-p", "--astro_path", help="The path of the Astroneer Dedicated Server installation (default: %(default)s)", dest="astro_path", default=None)
     parser.add_argument("-d", "--depotdl_exec", help="The path to anm existing depotdownloader executable (default: %(default)s)", dest="depotdl_exec", default=None)
+    parser.add_argument("-l", "--log_debug", help="Also log debug messages (Overrules config option)", action='store_true', dest="log_debug", default=False)
     
     args = parser.parse_args()
     
@@ -522,7 +527,7 @@ if __name__ == "__main__":
     print("")
     
     try:
-        launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec)
+        launcher = AstroTuxLauncher(args.config_path, args.astro_path, args.depotdl_exec, force_debug_log=args.log_debug)
     except KeyboardInterrupt:
         print("Quitting... (requested by user)")
         sys.exit(0)
