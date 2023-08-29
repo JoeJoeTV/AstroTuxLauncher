@@ -220,6 +220,8 @@ class AstroTuxLauncher():
             if path.isfile(depotdl_exec):
                 self.depotdl_path = path.abspath(depotdl_exec)
                 logging.info(f"DepotDownloader path overridden: {self.depotdl_path}")
+            else:
+                logging.warning("The given DepotDownloader path doesn't point to a file, using default path")
         
         # If argument is not given, default path is used and may not exists yet, so create directories
         if self.depotdl_path is None:
@@ -442,7 +444,7 @@ class AstroTuxLauncher():
             logging.error(f"There as an error while starting the Dedicated Server: {str(e)}")
             self.exit(reason="Error while starting Dedicated Server")
         
-        logging.info("Enter 'help' to get a list of available commands")
+        logging.info("Enter 'help' to get help about command usage")
         
         # Run Server Loop
         logging.debug("Starting server loop...")
@@ -451,22 +453,33 @@ class AstroTuxLauncher():
     
     def user_exit(self, signal, frame):
         """ Callback for when user requests to exit the application """
-        self.exit(graceful=True, reason="User Requested to exit")
+        self.exit(graceful=True, reason="Received SIGINT signal")
     
     def exit(self, graceful=False, reason=None):
-        if self.dedicatedserver and self.dedicatedserver.status == ServerStatus.RUNNING:
-            if graceful:
+        if graceful:
+            if reason:
+                logging.info(f"Quitting gracefully... (Reason: {reason})")
+            else:
+                logging.info("Quitting gracefully...")
+            
+            if self.dedicatedserver and self.dedicatedserver.status == ServerStatus.RUNNING:
+                # If server is running, simply shut it down and return to let it finish normally
                 self.dedicatedserver.shutdown()
                 return
             else:
-                self.dedicatedserver.kill()
-        
-        if reason:
-            logging.info(f"Quitting... (Reason: {reason})")
+                # If no server is running, exit directly
+                logging.info("Goodbye!")
+                sys.exit(0)
         else:
-            logging.info("Quitting...")
-        
-        sys.exit(0 if graceful else 1)
+            if reason:
+                logging.info(f"Quitting... (Reason: {reason})")
+            else:
+                logging.info("Quitting...")
+            
+            # Kill server if it's running or not
+            self.dedicatedserver.kill()
+            
+            sys.exit(1)
 
 if __name__ == "__main__":    
     # Parse command line arguments
@@ -506,6 +519,9 @@ if __name__ == "__main__":
         logging.info("Checking for available updates to the Astroneer Dedicated Server...")
         launcher.check_server_update(force_update=True)
     elif args.command == LauncherCommand.START:
-        launcher.start_server()
+        try:
+            launcher.start_server()
+        except Exception as e:
+            launcher.exit(graceful=False, reason=f"Exception occured: {str(e)}")
     
-    logging.debug("Application finished")
+    logging.info("Goodbye!")

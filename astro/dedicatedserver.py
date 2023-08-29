@@ -853,6 +853,8 @@ class AstroDedicatedServer:
         if not self.rcon.connected or (self.status != ServerStatus.RUNNING):
             return False
         
+        logging.info("Shutting down Dedicated Server...")
+        
         res = self.rcon.DSServerShutdown()
         
         if res == True:
