@@ -11,13 +11,11 @@ import shutil
 import subprocess
 import time
 import logging
-from utils.interface import run_proc_with_logging, safeformat
+from utils.interface import run_proc_with_logging, safeformat, DOTS_SPINNER
 from alive_progress import alive_bar
-from alive_progress.animations.spinners import frame_spinner_factory
 
 DEPOTDL_LATEST_ZIP_URL="https://github.com/SteamRE/DepotDownloader/releases/latest/download/DepotDownloader-linux-x64.zip"
 
-DOTS_SPINNER = frame_spinner_factory("⣷⣯⣟⡿⢿⣻⣽⣾")
 
 def reporthook(blocks_done, block_size, file_size):
     size_trans = blocks_done * block_size

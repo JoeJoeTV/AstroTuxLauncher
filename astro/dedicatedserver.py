@@ -19,13 +19,14 @@ import subprocess
 import pathvalidate
 import time
 import astro.playfab as playfab
-from utils.interface import EventType, ConsoleParser, ProcessOutputThread
+from utils.interface import EventType, ConsoleParser, ProcessOutputThread, DOTS_SPINNER
 import psutil
 from enum import Enum
 import socket
 import traceback
 from queue import Queue, Empty
 import threading
+from alive_progress import alive_bar
 
 #
 #   Configuration
@@ -731,8 +732,8 @@ class AstroDedicatedServer:
         wait_time = self.launcher.config.PlayfabAPIInterval
         
         # Wait for DS to finish registration
-        while not self.registered:
-            try:
+        with alive_bar(title="Waiting for Dedicated Server to register with Playfab", spinner=DOTS_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False) as bar:
+            while not self.registered:
                 # Print all lines currently in process output queue
                 while True:
                     try:
@@ -743,39 +744,43 @@ class AstroDedicatedServer:
                         line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
                         logging.debug(f"(DS) {line}")
                 
-                # Request registration status
-                response = playfab.get_server(ip_port_combo, self.curr_xauth)
-                
-                if response["status"] != "OK":
-                    continue
-                
-                registered_servers = response["data"]["Games"]
-                
-                lobbyIDs = [srv["LobbyID"] for srv in registered_servers]
-                
-                # If the set of lobbyIDs without the old ones is empty, the server hasn't registered yet
-                if len(set(lobbyIDs) - set(old_lobbyIDs)) == 0:
-                    time.sleep(self.launcher.config.PlayfabAPIInterval)
-                else:
-                    now = time.time()
+                try:
+                    # Request registration status
+                    response = playfab.get_server(ip_port_combo, self.curr_xauth)
                     
-                    # Only mark server as registered, if passed time is greater thanb 15 secords (kept from AstroLauncher)
-                    if (now - start_time) > 15:
-                        self.registered = True
-                        self.lobby_id = registered_servers[0]["LobbyID"]
-                
-                if self.process.poll() is not None:
-                    logging.error("Server was closed before registration")
-                    return False
-            except:
-                # kept from AstroLauncher
-                logging.debug("Checking for registration failed. Probably radte limit, Backing off and trying again...")
-                
-                # If Playfab API wait time is below 30 seconds, increase it by one
-                if self.launcher.config.PlayfabAPIInterval < 30:
-                    self.launcher.config.PlayfabAPIInterval += 1
-                
-                time.sleep(self.launcher.config.PlayfabAPIInterval)
+                    # Update progress bar
+                    bar()
+                    
+                    if response["status"] != "OK":
+                        continue
+                    
+                    registered_servers = response["data"]["Games"]
+                    
+                    lobbyIDs = [srv["LobbyID"] for srv in registered_servers]
+                    
+                    # If the set of lobbyIDs without the old ones is empty, the server hasn't registered yet
+                    if len(set(lobbyIDs) - set(old_lobbyIDs)) == 0:
+                        time.sleep(self.launcher.config.PlayfabAPIInterval)
+                    else:
+                        now = time.time()
+                        
+                        # Only mark server as registered, if passed time is greater thanb 15 secords (kept from AstroLauncher)
+                        if (now - start_time) > 15:
+                            self.registered = True
+                            self.lobby_id = registered_servers[0]["LobbyID"]
+                    
+                    if self.process.poll() is not None:
+                        logging.error("Server was closed before registration")
+                        return False
+                except:
+                    # kept from AstroLauncher
+                    logging.debug("Checking for registration failed. Probably radte limit, Backing off and trying again...")
+                    
+                    # If Playfab API wait time is below 30 seconds, increase it by one
+                    if self.launcher.config.PlayfabAPIInterval < 30:
+                        self.launcher.config.PlayfabAPIInterval += 1
+                    
+                    time.sleep(self.launcher.config.PlayfabAPIInterval)
         
         self.launcher.config.PlayfabAPIInterval = wait_time
         

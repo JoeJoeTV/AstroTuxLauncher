@@ -11,6 +11,9 @@ from datetime import datetime
 import argparse
 import re
 import subprocess
+from alive_progress.animations.spinners import frame_spinner_factory
+
+DOTS_SPINNER = frame_spinner_factory("⣷⣯⣟⡿⢿⣻⣽⣾")
 
 #
 #   User Input
@@ -364,8 +367,8 @@ class ConsoleParser:
 #
 
 # Formats and colors
-LOGFORMAT = "[%(asctime)s] [%(threadName)s/%(levelname)s] %(message)s"
-CLOGFORMAT = "[%(asctime)s] %(log_color)s[%(threadName)s/%(levelname)s]%(reset)s %(message_log_color)s%(message)s"
+LOGFORMAT = "[%(asctime)s] [%(name)s/%(levelname)s] %(message)s"
+CLOGFORMAT = "[%(asctime)s] %(log_color)s[%(name)s/%(levelname)s]%(reset)s %(message_log_color)s%(message)s"
 DATEFORMAT = "%H:%M:%S"
 LOGCOLORS = {
     "DEBUG":    "white",
