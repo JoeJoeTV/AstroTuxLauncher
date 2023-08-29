@@ -730,7 +730,7 @@ class NTFYNotificationHandler(QueuedNotificationHandler):
 #   Miscellaneous
 #
 
-PROC_FORMAT="({name}) {message}"
+PROC_FORMAT="[{name}] {message}"
 
 def run_proc_with_logging(args, name, format=PROC_FORMAT, sleep_time=0.05, level=logging.INFO, alive_bar=None, **popen_args):
     """ Runs a process and outputs its output using the logging module and waits for it to finish """

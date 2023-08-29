@@ -8,7 +8,7 @@ from utils import net
 import logging
 from os import path
 import os
-from utils.misc import ExcludeIfNone
+from utils.misc import ExcludeIfNone, read_build_version
 from astro.rcon import PlayerCategory
 import re
 from typing import Optional, List
@@ -413,6 +413,7 @@ class AstroDedicatedServer:
         
         # Status of the Dedicated Server
         self.status = ServerStatus.OFF
+        self.build_version = None
         
         # Information about Playfab registration
         self.registered = False
@@ -498,9 +499,7 @@ class AstroDedicatedServer:
             # to get joined and left players aswell as savegame changes
             #
             
-            if update_server_data and not (self.status == ServerStatus.STOPPING):
-                logging.debug("Updating Server status data...")
-                
+            if update_server_data and not (self.status == ServerStatus.STOPPING):                
                 try:
                     prev_online_players = [pi for pi in self.curr_player_list.playerInfo if pi.inGame]
                     prev_online_player_guids = [pi.playerGuid for pi in prev_online_players]
@@ -524,13 +523,9 @@ class AstroDedicatedServer:
                             # Get difference of Player GUIDs to find out, who joined
                             player_diff_guid = list(set(online_player_guids) - set(prev_online_player_guids))
                             
-                            logging.debug(f"Joined GUIDs: {player_diff_guid}")
-                            
                             # Maybe redundant check
                             if len(player_diff) > 0:
                                 player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
-                                
-                                logging.debug(f"Joined Infos: {player_diff}")
                                 
                                 for info in player_diff:
                                     self.launcher.notifications.send_event(EventType.PLAYER_JOIN, player_name=info["name"], player_guid=info["guid"])
@@ -542,13 +537,9 @@ class AstroDedicatedServer:
                             # Get difference of Player GUIDs to find out, who left
                             player_diff_guid = list(set(prev_online_player_guids) - set(online_player_guids))
                             
-                            logging.debug(f"Left GUIDs: {player_diff_guid}")
-                            
                             # Maybe redundant check
                             if len(player_diff) > 0:
                                 player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
-                                
-                                logging.debug(f"Left Infos: {player_diff}")
                                 
                                 for info in player_diff:
                                     self.launcher.notifications.send_event(EventType.PLAYER_LEAVE, player_name=info["name"], player_guid=info["guid"])
@@ -574,15 +565,8 @@ class AstroDedicatedServer:
                     logging.error(traceback.format_exc())
             
             # Handle console commands in queue
-            while not self.launcher.cmd_queue.empty():
-                # break out of loop, if RCON not available
-                if not self.rcon.connected:
-                    logging.debug("Can't execute command, because RCON is not connected")
-                    break
-                
+            while not self.launcher.cmd_queue.empty():                
                 args = self.launcher.cmd_queue.get()
-                
-                self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"])
                 
                 
                 #TODO: Change functions in server such that they return a boolean AND a message, which makes logging easier
@@ -689,6 +673,9 @@ class AstroDedicatedServer:
                                     logging.info(f"    - {gi.name} [{gi.data}]  Creative: {gi.bHasBeenFlaggedAsCreativeModeSave}")
                             else:
                                 logging.info("Savegame information not available right now")
+                    
+                    # Send notification event after executing command
+                    self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"])
                 except Exception as e:
                     logging.error(f"Error occured while executing command: {str(e)}")
         
@@ -702,7 +689,7 @@ class AstroDedicatedServer:
             Start the dedicated server process and wait for it to be registered to playfab
         """
         
-        #TODO: Check in launcher calling this function for exception and exit
+        logging.info("Preparing to start the Dedicated Server...")
         
         ip_port_combo = f"{self.ds_config.PublicIP}:{self.engine_config.Port}"
         
@@ -712,13 +699,14 @@ class AstroDedicatedServer:
         # Deregister all still with playfab registered servers to avoid issues
         old_lobbyIDs = self.deregister_all_servers()
         
-        logging.debug("Starting Server process...")
         start_time = time.time()
         try:
             self.start_process()
-        except:
-            logging.error("Could not start Dedicated Server process")
+        except Exception as e:
+            logging.error(f"Could not start Dedicated Server process: {str(e)}")
             return False
+        
+        self.build_version = read_build_version(self.astro_path)
         
         # If process has exited immediately, something went wrong
         if self.process.poll() is not None:
@@ -727,7 +715,7 @@ class AstroDedicatedServer:
         
         self.status = ServerStatus.STARTING
         
-        logging.debug("Started Dedicated Server process. Waiting for registration...")
+        logging.debug(f"Started Dedicated Server process (v{str(self.build_version)}). Waiting for registration...")
         
         wait_time = self.launcher.config.PlayfabAPIInterval
         
@@ -742,7 +730,7 @@ class AstroDedicatedServer:
                         break
                     else:
                         line = line.replace("\n", "")   # Remove newline character, since it it unnecessary
-                        logging.debug(f"(DS) {line}")
+                        logging.debug(f"[AstroDS] {line}")
                 
                 try:
                     # Request registration status
@@ -774,7 +762,7 @@ class AstroDedicatedServer:
                         return False
                 except:
                     # kept from AstroLauncher
-                    logging.debug("Checking for registration failed. Probably radte limit, Backing off and trying again...")
+                    logging.debug("Checking for registration failed. Probably rate limit, Backing off and trying again...")
                     
                     # If Playfab API wait time is below 30 seconds, increase it by one
                     if self.launcher.config.PlayfabAPIInterval < 30:
@@ -1188,7 +1176,7 @@ class AstroDedicatedServer:
             logging.debug(f"Trying to deregister {len(registered_servers)} servers with maching IP-Port-combination from Playfab...")
             
             for i, srv in enumerate(registered_servers):
-                logging.debug(f"Deregistering server {i}")
+                logging.debug(f"Deregistering server {i} with LobbyID {srv['LobbyID']}...")
                 
                 response = playfab.deregister_server(srv["LobbyID"], self.curr_xauth)
                 
@@ -1197,7 +1185,7 @@ class AstroDedicatedServer:
             
             logging.debug("Finished deregistration")
             
-            # AstroLauncher has this for some reason
+            # AstroLauncher has this for some reason, so keep it for now
             time.sleep(1)
             
             return [srv["LobbyID"] for srv in registered_servers]

@@ -99,7 +99,6 @@ def tcp_socket_scope(ip, port):
     """ Creates TCP socket and closes it. For use in combination with with statement """
     s = None
     try:
-        logging.debug(f"Connecting TCP socket to {ip}:{port}")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(5)
         s.connect((ip, int(port)))
@@ -115,16 +114,13 @@ def secret_socket_client(ip, port, secret, tcp):
     try:
         if tcp:
             with tcp_socket_scope(ip, port) as s:
-                logging.debug(f"Sending {secret} over TCP")
                 s.sendall(secret)
         else:
-            logging.debug(f"Sending {secret} over UDP")
             time.sleep(2)
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.sendto(secret, (ip, port))
     except Exception as e:
-        logging.error(f"Error during receiving: {str(e)}")
-        logging.error(traceback.format_exc())
+        pass
 
 def secret_socket_server(port, secret, tcp):
     """
@@ -133,7 +129,6 @@ def secret_socket_server(port, secret, tcp):
         {tcp} indicates if TCP or UDP should be used.
     """
     try:
-        logging.debug("Creating socket")
         # Create correct socket
         if tcp:
             server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -141,8 +136,6 @@ def secret_socket_server(port, secret, tcp):
             server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         
         server_socket.settimeout(10)
-        
-        logging.debug("Binding socket to public ip and port")
         
         # Bind to public host
         server_socket.bind(("0.0.0.0", port))
@@ -157,7 +150,6 @@ def secret_socket_server(port, secret, tcp):
             
             if tcp:
                 connection, _client_address = server_socket.accept()
-                logging.debug("Accepted client")
             
             # Receive and check data
             while True:
@@ -166,16 +158,17 @@ def secret_socket_server(port, secret, tcp):
                 else:
                     data = server_socket.recv(32)
                 
-                logging.debug(f"Received data: {str(data)}")
-                
                 # If data matches, were finished
                 if data == secret:
-                    logging.debug("Data matches!")
+                    logging.debug("Received Data matches expected secret")
+                    
                     if tcp:
                         connection.close()
                     
                     return True
                 else:
+                    logging.debug(f"Received Data ({str(data)}) doesn't match expected secret ({str(secret)})")
+                    
                     return False
     except Exception as e:
         logging.error(f"Error during receiving: {str(e)}")
@@ -190,8 +183,6 @@ def net_test_local(ip, port, tcp):
     """
     
     secret_phrase = secrets.token_hex(16).encode()
-    
-    logging.debug(f"Secret Token: {secret_phrase}")
     
     # Send secret phrase to public IP
     send_thread = threading.Thread(target=secret_socket_client, args=(ip, port, secret_phrase, tcp))

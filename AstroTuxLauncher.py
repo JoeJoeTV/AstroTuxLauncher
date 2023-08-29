@@ -235,7 +235,7 @@ class AstroTuxLauncher():
         self.cmd_queue = Queue()
         
         # Initialize Input Thread to handle console input later. Don't start thread just yet
-        self.input_thread = interface.KeyboardThread(self.on_input, False)
+        self.input_thread = interface.KeyboardThread(self.on_input, True)
         
         # Initialize notification objects
         self.notifications = interface.NotificationManager()
@@ -277,7 +277,7 @@ class AstroTuxLauncher():
             Creates/updated the WINE prefix
         """
         
-        logging.debug("Creating/updating WINE prefix...")
+        logging.debug("Ensuring WINE prefix is setup...")
         
         cmd = [self.wineexec, "wineboot"]
         env = os.environ.copy()
@@ -288,6 +288,8 @@ class AstroTuxLauncher():
         
         env["WINEPREFIX"] = self.config.WinePrefixPath
         env["WINEDEBUG"] = "-all"
+        
+        logging.debug(f"Executing command: {' '.join(cmd)} in WINE prefix '{self.config.WinePrefixPath}'...")
         
         try:
             wineprocess = subprocess.Popen(cmd, env=env, cwd=self.config.AstroServerPath, stderr=subprocess.PIPE, stdout=subprocess.PIPE, close_fds=True)
@@ -305,6 +307,8 @@ class AstroTuxLauncher():
         if not self.dedicatedserver:
             raise ValueError("Dedcated Server has to be created first")
         
+        logging.info("Checking Network Configuration...")
+        
         # Check if server port is reachable from local network over UDP
         server_local_reachable = net.net_test_local(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.engine_config.Port, False)
         
@@ -312,8 +316,6 @@ class AstroTuxLauncher():
         server_nonlocal_reachable = net.net_test_nonlocal(self.dedicatedserver.ds_config.PublicIP, self.dedicatedserver.engine_config.Port)
         
         test_res = (server_local_reachable, server_nonlocal_reachable)
-        
-        logging.debug(f"Test Matrix: {str(test_res)}")
         
         if test_res == (True, True):
             logging.info("Network configuration looks good")
@@ -347,18 +349,18 @@ class AstroTuxLauncher():
         
         # If DepotDownloader executable doesn't exists yet, download it
         if not path.exists(self.depotdl_path):
-            logging.info("Downloading DepotDownloader...")
+            logging.info("DepotDownloader not found, downloading...")
             steam.dl_depotdownloader(path.dirname(self.depotdl_path), path.basename(self.depotdl_path))
         
-        logging.info("Downloading Astroneer Dedicated Server...")
+        logging.info("Updating Astroneer Dedicated Server app from Steam...")
         success = steam.update_app(exec_path=self.depotdl_path, app="728470", os="windows", directory=self.config.AstroServerPath)
         
         self.buildversion = read_build_version(self.config.AstroServerPath)
         
         if success and (self.buildversion is not None):
-            logging.info(f"Sucessfully downloaded Astroneer Dedicated Server version {self.buildversion}")
+            logging.info(f"Sucessfully updated Astroneer Dedicated Server to version {self.buildversion}")
         else:
-            logging.error("Error while downloading Astroneer Dedicated Server")
+            logging.error("Error while updating Astroneer Dedicated Server")
     
     def check_server_update(self, force_update=False):
         """
@@ -391,9 +393,9 @@ class AstroTuxLauncher():
         if do_update:
             if self.config.AutoUpdateServer:
                 if installed:
-                    logging.info("Automatically updating server")
+                    logging.info("Automatically updating Astroneer Dedicated Server...")
                 else:
-                    logging.info("Automatically installing server")
+                    logging.info("Automatically installing Astroneer Dedicated Server...")
             
             if self.config.AutoUpdateServer or force_update:
                 self.update_server()
@@ -401,7 +403,9 @@ class AstroTuxLauncher():
                 logging.info("Not installing/updating automatically")
         else:
             if force_update:
-                logging.info("Nothing to do")
+                logging.info("Noting to do")
+            else:
+                logging.info("No update available, the Astroneer Dedicated Server is on the newest version")
         
     def start_server(self):
         """
@@ -428,6 +432,7 @@ class AstroTuxLauncher():
         if self.config.CheckNetwork:
             self.check_network_config()
         
+        logging.debug("Starting input thread...")
         self.input_thread.start()
         
         # Prepare and start dedicated server
@@ -437,14 +442,11 @@ class AstroTuxLauncher():
             logging.error(f"There as an error while starting the Dedicated Server: {str(e)}")
             self.exit(reason="Error while starting Dedicated Server")
         
-        logging.debug("Activating input thread...")
-        self.input_thread.set_active(True)
+        logging.info("Enter 'help' to get a list of available commands")
         
-        logging.debug("Starting server loop...")
         # Run Server Loop
+        logging.debug("Starting server loop...")
         self.dedicatedserver.server_loop()
-        
-        logging.debug("Server loop finished")
     
     
     def user_exit(self, signal, frame):
@@ -466,18 +468,18 @@ class AstroTuxLauncher():
         
         sys.exit(0 if graceful else 1)
 
-if __name__ == "__main__":
-    # Set terminal window title
-    set_window_title(f"{NAME} - Unofficial Astroneer Dedicated Server Launcher for Linux")
-    
+if __name__ == "__main__":    
     # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("command", type=LauncherCommand, action=interface.EnumStoreAction, help=HELP_COMMAND)
     parser.add_argument("-c", "--config_path", help="The location of the configuration file (default: %(default)s)", type=str, dest="config_path", default="launcher.toml")
     parser.add_argument("-p", "--astro_path", help="The path of the Astroneer Dedicated Server installation (default: %(default)s)", dest="astro_path", default=None)
     parser.add_argument("-d", "--depotdl_exec", help="The path to anm existing depotdownloader executable (default: %(default)s)", dest="depotdl_exec", default=None)
-        
+    
     args = parser.parse_args()
+    
+    # Set terminal window title
+    set_window_title(f"{NAME} - Unofficial Astroneer Dedicated Server Launcher for Linux")
     
     # Print Banner
     print(BANNER_LOGO, end="")
@@ -495,6 +497,8 @@ if __name__ == "__main__":
     
     signal.signal(signal.SIGINT, launcher.user_exit)
     
+    logging.debug(f"CLI Command: {args.command.value}")
+    
     if args.command == LauncherCommand.INSTALL:
         logging.info("Installing Astroneer Dedicated Server...")
         launcher.update_server()
@@ -502,7 +506,6 @@ if __name__ == "__main__":
         logging.info("Checking for available updates to the Astroneer Dedicated Server...")
         launcher.check_server_update(force_update=True)
     elif args.command == LauncherCommand.START:
-        logging.info("Starting Astroneer Dedicated Server")
         launcher.start_server()
     
     logging.debug("Application finished")

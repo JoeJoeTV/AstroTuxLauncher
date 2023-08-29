@@ -76,6 +76,10 @@ def dl_depotdownloader(dest_dir, execname="depotdownloader"):
         # Download DepotDownloader release zip and save it in temporary directory
         dl = FileDownloader(DEPOTDL_LATEST_ZIP_URL, filename=path.join(tmpdir, "depotdl.zip"), log_level=logging.DEBUG, percent_mod=5)
         
+        logging.debug(f"Downloading '{DEPOTDL_LATEST_ZIP_URL}' to '{path.join(tmpdir, 'depotdl.zip')}'")
+        
+        start_time = time.time()
+        
         with alive_bar(title="Downloading DepotDownloader", spinner=DOTS_SPINNER, bar="smooth", manual=True, receipt=True, enrich_print=False) as bar:
             zip_path, _ = dl.download(bar)
         
@@ -94,6 +98,11 @@ def dl_depotdownloader(dest_dir, execname="depotdownloader"):
         
         # Make file executable
         os.chmod(dest_path, 0o775)
+        
+        end_time = time.time()
+        elapsed = end_time - start_time
+        
+        logging.info(f"Finished downloading DepotDownloader in {round(elapsed, 2)} seconds")
     
     return dest_path
 
@@ -115,9 +124,21 @@ def update_app(exec_path, app, os, directory):
     
     cmd_args = [str(exec_path), "-app", str(app), "-os", str(os), "-dir", path.abspath(directory), "-validate"]
     
+    logging.debug(f"Executing DepotDownloader command: {' '.join(cmd_args)}")
+    
+    start_time = time.time()
+    
     # Run update command, log output and wait until it is finished
     with alive_bar(title=f"Updating app {app}", spinner=DOTS_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False) as bar:
         proc_res = run_proc_with_logging(cmd_args, "DepotDL", level=logging.DEBUG, alive_bar=bar)
     
+    end_time = time.time()
+    elapsed = end_time - start_time
+
+    success = (proc_res == 0)
+    
+    if success:
+        logging.info(f"Finished updating app {app} in {round(elapsed, 2)} seconds")
+    
     # Return boolean based on update process exit code
-    return (proc_res == 0)
+    return success
