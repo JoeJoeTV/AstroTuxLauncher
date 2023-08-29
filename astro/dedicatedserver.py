@@ -683,7 +683,7 @@ class AstroDedicatedServer:
                                 logging.info("Savegames:")
                                 
                                 for gi in self.curr_game_list.gameList:
-                                    logging.info(f"    - {gi.name} [{gi.data}]  Creative: {gi.bHasBeenFlaggedAsCreativeModeSave}")
+                                    logging.info(f"    - {gi.name} [{gi.date}]  Creative: {gi.bHasBeenFlaggedAsCreativeModeSave}")
                             else:
                                 logging.info("Savegame information not available right now")
                     

@@ -839,16 +839,16 @@ NTFY_HEADERS = {
 }
 
 NTFY_EVENT_EXTRA_MAPPING = {
-    EventType.MESSAGE           : {"priority": 3, "emoji": "information_source"},
+    EventType.MESSAGE           : {"priority": 2, "emoji": "information_source"},
     EventType.START             : {"priority": 4, "emoji": "green_square"},
     EventType.REGISTERED        : {"priority": 3, "emoji": "white_check_mark"},
     EventType.SHUTDOWN          : {"priority": 4, "emoji": "orange_square"},
     EventType.CRASH             : {"priority": 5, "emoji": "red_square"},
     EventType.PLAYER_JOIN       : {"priority": 3, "emoji": "inbox_tray"},
     EventType.PLAYER_LEAVE      : {"priority": 3, "emoji": "outbox_tray"},
-    EventType.COMMAND           : {"priority": 4, "emoji": "wrench"},
-    EventType.SAVE              : {"priority": 3, "emoji": "file_cabinet"},
-    EventType.SAVEGAME_CHANGE   : {"priority": 3, "emoji": "card_index_dividers"}
+    EventType.COMMAND           : {"priority": 3, "emoji": "wrench"},
+    EventType.SAVE              : {"priority": 2, "emoji": "file_cabinet"},
+    EventType.SAVEGAME_CHANGE   : {"priority": 2, "emoji": "card_index_dividers"}
 }
 
 class NTFYNotificationHandler(QueuedNotificationHandler):
