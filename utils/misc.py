@@ -1,6 +1,6 @@
 from os import path
 
-LAUNCHER_VERSION="1.0.0"
+LAUNCHER_VERSION="1.0.1"
 
 def ExcludeIfNone(value):
     """Do not include field for None values"""
