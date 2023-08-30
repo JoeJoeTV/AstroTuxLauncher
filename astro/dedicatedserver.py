@@ -835,15 +835,6 @@ class AstroDedicatedServer:
         
         self.process = subprocess.Popen(cmd, env=env, cwd=self.astro_path, stderr=subprocess.PIPE, bufsize=1, close_fds=True, text=True)
         
-        def enqueue_output(out, queue):
-            """ Reads lines from {out} and adds them to {queue} """
-            try:
-                for line in iter(out.readline, b''):
-                    queue.put(line)
-                out.close()
-            except Exception as e:
-                LOGGER.error(f"Error in output thread: {str(e)}")
-        
         self.process_out_thread = ProcessOutputThread(self.process.stderr, self.process_out_queue)
         self.process_out_thread.start()
         
