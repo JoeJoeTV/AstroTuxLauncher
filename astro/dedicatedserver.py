@@ -540,7 +540,7 @@ class AstroDedicatedServer:
                             player_diff_guid = list(set(online_player_guids) - set(prev_online_player_guids))
                             
                             # Maybe redundant check
-                            if len(player_diff) > 0:
+                            if len(player_diff_guid) > 0:
                                 player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
                                 
                                 for info in player_diff:
@@ -554,7 +554,7 @@ class AstroDedicatedServer:
                             player_diff_guid = list(set(prev_online_player_guids) - set(online_player_guids))
                             
                             # Maybe redundant check
-                            if len(player_diff) > 0:
+                            if len(player_diff_guid) > 0:
                                 player_diff = [{"name": pi.playerName, "guid": pi.playerGuid} for pi in self.curr_player_list.playerInfo if pi.playerGuid in player_diff_guid]
                                 
                                 for info in player_diff:
