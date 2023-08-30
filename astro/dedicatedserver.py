@@ -68,7 +68,7 @@ class PlayerProperties:
         match = re.search(r"\((.*)\)", string)
         
         if not match:
-            raise ValueError("Invalid PlayerProperties string string")
+            raise ValueError(f"Invalid PlayerProperties string: '{string}'({type(string)})")
         
         # Get content inside of parenthesies and split k-v-pairs into list
         args = match.group(1).split(",")
@@ -104,6 +104,11 @@ class PlayerProperties:
     @staticmethod
     def list_encoder(pp_list):
         """ Encode list of PlayerProperties objects into string list to be used by dataclass """
+        
+        # If length of list is one, just encode as string instead of list with single element
+        if len(pp_list) == 1:
+            return pp_list[0].to_string()
+        
         return [pp.to_string() for pp in pp_list]
     
     # See https://github.com/lidatong/dataclasses-json/issues/122
@@ -113,6 +118,10 @@ class PlayerProperties:
         # Directly return value, if already decoded
         if value and isinstance(value[0], PlayerProperties):
             return value
+        
+        # If only one item is present, value will just be a string, so we only have one item
+        if value and isinstance(value, str):
+            return [PlayerProperties.from_string(value)]
         
         return [PlayerProperties.from_string(pp_str) for pp_str in value]
 
