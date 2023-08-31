@@ -704,6 +704,10 @@ class AstroDedicatedServer:
                     self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"], server_version=self.build_version)
                 except Exception as e:
                     LOGGER.error(f"Error occured while executing command: {str(e)}")
+            
+            # If we didn't do an update, wait a short while. This reduces the CPU usage of the launcher
+            if not update_server_data:
+                time.sleep(0.005)
         
         # Kill remaining wine processes
         self.kill()
