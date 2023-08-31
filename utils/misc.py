@@ -1,6 +1,13 @@
 from os import path
+import os
 
 LAUNCHER_VERSION="1.0.1"
+
+CONTROL_CODES_SUPPORTED = None
+
+# If TERM environment variable contains "coloronly", disable stuff that uses ANSI escape codes other than color
+if ("TERM" in os.environ) and ("coloronly" in os.environ["TERM"]):
+    CONTROL_CODES_SUPPORTED = False
 
 def ExcludeIfNone(value):
     """Do not include field for None values"""

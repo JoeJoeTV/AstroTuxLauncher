@@ -8,7 +8,7 @@ from utils import net
 import logging
 from os import path
 import os
-from utils.misc import ExcludeIfNone, read_build_version
+from utils.misc import ExcludeIfNone, read_build_version, CONTROL_CODES_SUPPORTED
 from astro.rcon import PlayerCategory
 import re
 from typing import Optional, List
@@ -750,7 +750,7 @@ class AstroDedicatedServer:
         wait_time = self.launcher.config.PlayfabAPIInterval
         
         # Wait for DS to finish registration
-        with alive_bar(title="Waiting for Dedicated Server to register with Playfab", spinner=DOTS_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False) as bar:
+        with alive_bar(title="Waiting for Dedicated Server to register with Playfab", spinner=DOTS_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False, force_tty=CONTROL_CODES_SUPPORTED) as bar:
             while not self.registered:
                 # Print all lines currently in process output queue
                 while True:

@@ -9,7 +9,7 @@ import dataclasses
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config
 from typing import Optional
-from utils.misc import ExcludeIfNone, read_build_version, LAUNCHER_VERSION
+from utils.misc import ExcludeIfNone, read_build_version, LAUNCHER_VERSION, CONTROL_CODES_SUPPORTED
 from utils.termutils import set_window_title
 from enum import Enum
 from pansi import ansi
@@ -504,7 +504,7 @@ class AstroTuxLauncher():
             
             sys.exit(1)
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("command", type=LauncherCommand, action=interface.EnumStoreAction, help=HELP_COMMAND)
@@ -515,8 +515,10 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
+    
     # Set terminal window title
-    set_window_title(f"{NAME} - Unofficial Astroneer Dedicated Server Launcher for Linux")
+    if CONTROL_CODES_SUPPORTED is None:
+        set_window_title(f"{NAME} - Unofficial Astroneer Dedicated Server Launcher for Linux")
     
     # Print Banner
     print(BANNER_LOGO, end="")
@@ -533,6 +535,9 @@ if __name__ == "__main__":
         sys.exit(0)
     
     signal.signal(signal.SIGINT, launcher.user_exit)
+    
+    if CONTROL_CODES_SUPPORTED == False:
+        LOGGER.debug("ANSI escape codes except color codes are disabled")
     
     LOGGER.debug(f"CLI Command: {args.command.value}")
     

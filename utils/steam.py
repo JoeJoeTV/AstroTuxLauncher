@@ -13,6 +13,7 @@ import time
 import logging
 from utils.interface import run_proc_with_logging, safeformat, DOTS_SPINNER
 from alive_progress import alive_bar
+from utils.misc import CONTROL_CODES_SUPPORTED
 
 DEPOTDL_LATEST_ZIP_URL="https://github.com/SteamRE/DepotDownloader/releases/latest/download/DepotDownloader-linux-x64.zip"
 
@@ -81,7 +82,7 @@ def dl_depotdownloader(dest_dir, execname="depotdownloader"):
         
         start_time = time.time()
         
-        with alive_bar(title="Downloading DepotDownloader", spinner=DOTS_SPINNER, bar="smooth", manual=True, receipt=True, enrich_print=False) as bar:
+        with alive_bar(title="Downloading DepotDownloader", spinner=DOTS_SPINNER, bar="smooth", manual=True, receipt=True, enrich_print=False, force_tty=CONTROL_CODES_SUPPORTED) as bar:
             zip_path, _ = dl.download(bar)
         
         # Extract zip file into tmp dir
@@ -130,7 +131,7 @@ def update_app(exec_path, app, os, directory):
     start_time = time.time()
     
     # Run update command, log output and wait until it is finished
-    with alive_bar(title=f"Updating app {app}", spinner=DOTS_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False) as bar:
+    with alive_bar(title=f"Updating app {app}", spinner=DOTS_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False, force_tty=CONTROL_CODES_SUPPORTED) as bar:
         proc_res = run_proc_with_logging(cmd_args, "DepotDL", level=logging.DEBUG, alive_bar=bar)
     
     end_time = time.time()
