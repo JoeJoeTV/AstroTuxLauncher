@@ -815,6 +815,8 @@ class DiscordNotificationHandler(QueuedNotificationHandler):
         super().__init__(name, event_whitelist, event_formats)
         
         self.logger = logging.getLogger("DiscordNotify")
+        
+        self.logger.debug(f"Event Whitelist: {list(self.whitelist)}")
     
     def _send_message(self, event_type, message):
         extra = self.extra_mapping[event_type]
@@ -882,6 +884,8 @@ class NTFYNotificationHandler(QueuedNotificationHandler):
         super().__init__(name, event_whitelist, event_formats)
         
         self.logger = logging.getLogger("NTFYNotify")
+        
+        self.logger.debug(f"Event Whitelist: {list(self.whitelist)}")
     
     def _send_message(self, event_type, message):
         extra = self.extra_mapping[event_type]

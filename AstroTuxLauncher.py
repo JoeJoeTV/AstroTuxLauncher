@@ -98,6 +98,7 @@ class NTFYConfig:
 class NotificationConfig:
     method: NotificationMethod = NotificationMethod.NONE
     name: str = "Astroneer Dedicated Server"
+    EventWhitelist: list[interface.EventType] = field(default_factory=lambda: [e for e in interface.EventType])
     
     discord: Optional[DiscordConfig] = field(metadata=config(exclude=ExcludeIfNone), default=None)
     ntfy: Optional[NTFYConfig] = field(metadata=config(exclude=ExcludeIfNone), default=None)
@@ -264,12 +265,12 @@ class AstroTuxLauncher():
         
         if self.config.notifications.method == NotificationMethod.DISCORD:
             if self.config.notifications.discord.webhookURL:
-                self.notifications.add_handler(interface.DiscordNotificationHandler(self.config.notifications.discord.webhookURL, name=self.config.notifications.name))
+                self.notifications.add_handler(interface.DiscordNotificationHandler(self.config.notifications.discord.webhookURL, name=self.config.notifications.name, event_whitelist=set(self.config.notifications.EventWhitelist)))
             else:
                 LOGGER.warning("Discord Webhook URL is not set in config, not sending Discord notifications")
         elif self.config.notifications.method == NotificationMethod.NTFY:
             if self.config.notifications.ntfy.topic:
-                self.notifications.add_handler(interface.NTFYNotificationHandler(self.config.notifications.ntfy.topic, ntfy_url=self.config.notifications.ntfy.serverURL, name=self.config.notifications.name))
+                self.notifications.add_handler(interface.NTFYNotificationHandler(self.config.notifications.ntfy.topic, ntfy_url=self.config.notifications.ntfy.serverURL, name=self.config.notifications.name, event_whitelist=set(self.config.notifications.EventWhitelist)))
             else:
                 LOGGER.warning("ntfy topic is not set in config, not sending ntfy notifications")
         
