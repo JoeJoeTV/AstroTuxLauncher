@@ -91,6 +91,9 @@ method = "ntfy"
 # (String) Name of the server to use in notifications
 name = "Astro DS"
 
+# (List of String) Event types that should be sent using the external notification method (By default all event types)
+EventWhitelist = ["message", "start", "registered", "shutdown", "crash", "player_join", "player_leave", "command", "save", "savegame_change"]
+
 
 # (Optional) Settings specific to Discord (Only required, if method is "discord")
 [launcher.notifications.discord]
@@ -107,7 +110,20 @@ topic = # Not set by default
 
 # (URL as String) URL of the ntfy server to use for sending notifications
 serverURL = "https://ntfy.sh"
+
+# Settings related to sending status updates to an endpoint (currently mostly just Uptime Kuma using the 'Push' monitor type)
+[launcher.status]
+
+# (Boolean) Wether to send status updates at all
+SendStatus = false
+
+# (Integer) The interval in seconds to send status updates at, if the status doesn't change in-between
+Interval = 120
+
+# (URL as String) The endpoint to send the status update to as a GET request with parameters
+EndpointURL = ""
 ```
+
 
 ## Credits
 
