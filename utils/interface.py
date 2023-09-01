@@ -223,6 +223,7 @@ class ConsoleParser:
         WHITELIST = "whitelist"
         LIST = "list"
         SAVEGAME = "savegame"
+        PLAYER = "player"
     
     class WhitelistSubcommand(Enum):
         ENABLE = "enable"
@@ -242,6 +243,16 @@ class ConsoleParser:
         SAVE = "save"
         NEW = "new"
         LIST = "list"
+    
+    class PlayerSubcommand(Enum):
+        SET = "set"
+        GET = "get"
+        
+    class PlayerCategory(Enum):
+        UNLISTED = "unlisted"
+        BLACKLISTED = "blacklisted"
+        WHITELISTED = "whitelisted"
+        ADMIN = "admin"
     
     def __init__(self):
         self.parser = ArgumentParser(prog="", add_help=False, exit_on_error=False)
@@ -296,6 +307,17 @@ class ConsoleParser:
         self.subparsers["savegame.new"].add_argument("save_name", type=str, nargs="?",help="The name of the new save to create")
         
         self.subparsers["savegame.list"] = savegame_section.add_parser(ConsoleParser.SaveGameSubcommand.LIST, add_help=False, exit_on_error=False, help="List all the available savegames and marks the active one", description="List all the available savegames and marks the active one")
+
+        ## 'player' command
+        self.subparsers["player"] = subparser_section.add_parser(ConsoleParser.Command.PLAYER, help="Manages and shows Player Categories", description="Manages and shows Player Categories", add_help=False, exit_on_error=False)
+        player_section = self.subparsers["player"].add_subparsers(parser_class=ArgumentParser, title="Sub-Command", description=None, dest="subcmd", type=ConsoleParser.PlayerSubcommand, action=SubParserEnumStoreAction, required=True)
+        
+        self.subparsers["player.set"] = player_section.add_parser(ConsoleParser.PlayerSubcommand.SET, add_help=False, exit_on_error=False, help="Sets the Category of a Player", description="Sets the Category of a Player")
+        self.subparsers["player.set"].add_argument("player", type=str, help="The name or GUID of the player")
+        self.subparsers["player.set"].add_argument("category", type=ConsoleParser.PlayerCategory, action=EnumStoreAction, help="The category to set the player to")
+        
+        self.subparsers["player.get"] = player_section.add_parser(ConsoleParser.PlayerSubcommand.GET, add_help=False, exit_on_error=False, help="Gets the Category of a Player", description="Gets the Category of a Player")
+        self.subparsers["player.get"].add_argument("player", type=str, help="The name or GUID of the player")
     
     def get_help(self, cmd=None, subcmd=None):
         """

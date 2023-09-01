@@ -701,6 +701,29 @@ class AstroDedicatedServer:
                                     CMD_LOGGER.info(f"    - {gi.name} [{gi.date}]  Creative: {gi.bHasBeenFlaggedAsCreativeModeSave}")
                             else:
                                 CMD_LOGGER.info("Savegame information not available right now")
+
+                    elif args["cmd"] == ConsoleParser.Command.PLAYER:
+                        if args["subcmd"] == ConsoleParser.PlayerSubcommand.SET:
+                            res = self.set_player_category(category=PlayerCategory[args["category"].name], name=args["player"], guid=args["player"])
+                            
+                            if res is None:
+                                CMD_LOGGER.warning("Specified player was not found")
+                            elif res == True:
+                                CMD_LOGGER.info("Successfully changed player category")
+                            else:
+                                CMD_LOGGER.info("There was a problem while executing the command")
+                            
+                        elif args["subcmd"] == ConsoleParser.PlayerSubcommand.GET:
+                            player_info = self.get_player_info(name=args["player"], guid=args["player"])
+                            
+                            if player_info:
+                                CMD_LOGGER.info("Player Information:")
+                                CMD_LOGGER.info(f"  - Name: {player_info.playerName}")
+                                CMD_LOGGER.info(f"  - GUID: {player_info.playerGuid}")
+                                CMD_LOGGER.info(f"  - Category: {player_info.playerCategory.value}")
+                                CMD_LOGGER.info(f"  - Online: {'yes' if player_info.inGame else 'no'}")
+                            else:
+                                CMD_LOGGER.info("Player information not available right now")
                     
                     # Send notification event after executing command
                     self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"], server_version=self.build_version)
@@ -918,7 +941,7 @@ class AstroDedicatedServer:
                 - force: Wether to send the command without checking the player list first.
                     Only works, if {name} is set
 
-            Returns: A boolean indicating the success
+            Returns: A boolean indicating the success or None if the player was not found
         """
         
         if (name is None) and (guid is None):
@@ -936,7 +959,7 @@ class AstroDedicatedServer:
             player_info = self.get_player_info(name=name, guid=guid)
             
             if player_info is None:
-                return False
+                return None
             
             res = self.rcon.DSSetPlayerCategoryForPlayerName(player_info.playerName, category)
         
