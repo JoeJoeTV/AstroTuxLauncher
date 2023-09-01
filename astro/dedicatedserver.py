@@ -472,10 +472,12 @@ class AstroDedicatedServer:
             if proc_status is not None:
                 if self.status == ServerStatus.STOPPING and proc_status == 0:
                     LOGGER.info("Dedicated Server shut down gracefully")
+                    self.launcher.status_thread.update_status(status=False, message="Server shut down gracefully")
                     break
                 
                 if proc_status != 0:
                     self.launcher.notifications.send_event(EventType.CRASH, server_version=self.build_version)
+                    self.launcher.status_thread.update_status(status=False, message="Server crashed")
                 
                 # Server process has exited
                 LOGGER.debug(f"Server process closed with exit code {proc_status}")

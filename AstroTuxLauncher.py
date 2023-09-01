@@ -99,8 +99,14 @@ class NotificationConfig:
     method: NotificationMethod = NotificationMethod.NONE
     name: str = "Astroneer Dedicated Server"
     
-    discord: Optional[DiscordConfig] =  field(metadata=config(exclude=ExcludeIfNone), default=None)
-    ntfy: Optional[NTFYConfig] =  field(metadata=config(exclude=ExcludeIfNone), default=None)
+    discord: Optional[DiscordConfig] = field(metadata=config(exclude=ExcludeIfNone), default=None)
+    ntfy: Optional[NTFYConfig] = field(metadata=config(exclude=ExcludeIfNone), default=None)
+
+@dataclass
+class StatusConfig:
+    SendStatus: bool = False    # Wether to send status updates
+    Interval: int = 120         # Interval in which to send status updates
+    EndpointURL: str = ""       # URL to send status updates as GET requests to
 
 @dataclass_json
 @dataclass
@@ -112,6 +118,9 @@ class LauncherConfig:
     
     # Settings related to notifications
     notifications: NotificationConfig = NotificationConfig()    # Configuration for notifications
+    
+    # Settings related to sending status updates
+    status: StatusConfig = StatusConfig()
     
     LogDebugMessages: bool = False  # Wether the the console and log file should include log messages with level logging.DEBUG
     
@@ -244,6 +253,9 @@ class AstroTuxLauncher():
         
         # Initialize Input Thread to handle console input later. Don't start thread just yet
         self.input_thread = interface.KeyboardThread(self.on_input, True)
+        
+        # Initialize thread for sending status updates to endpoint
+        self.status_thread = interface.StatusUpdaterThread(self.config.status.EndpointURL, timeout=self.config.status.Interval, status=False)
         
         # Initialize notification objects
         self.notifications = interface.NotificationManager()
@@ -462,6 +474,13 @@ class AstroTuxLauncher():
         
         LOGGER.info("Enter 'help' to get help about command usage")
         
+        self.status_thread.update_status(status=True, message="Server is running")
+        
+        # If sending of status updates is enabled, start thread
+        if self.config.status.SendStatus:
+            LOGGER.info("Sending of status updated is enabled")
+            self.status_thread.start()
+        
         # Run Server Loop
         LOGGER.debug("Starting server loop...")
         self.dedicatedserver.server_loop()
@@ -501,6 +520,10 @@ class AstroTuxLauncher():
             
             # Kill server if it's running or not
             self.dedicatedserver.kill()
+            
+            # Give short time to send status update
+            self.status_thread.update_status(status=False, message="Server was forcibly closed")
+            time.sleep(0.1)
             
             sys.exit(1)
 

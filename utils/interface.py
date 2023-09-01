@@ -15,6 +15,8 @@ from alive_progress.animations.spinners import frame_spinner_factory
 from utils.misc import LAUNCHER_VERSION
 import utils.net as net
 import json
+from requests.utils import requote_uri
+import urllib.parse as urlparse
 
 DOTS_SPINNER = frame_spinner_factory("⣷⣯⣟⡿⢿⣻⣽⣾")
 
@@ -937,3 +939,93 @@ def run_proc_with_logging(args, name, format=PROC_FORMAT, sleep_time=0.05, level
         time.sleep(sleep_time)
     
     return process.poll()
+
+
+# Class for sending regular status updates to an http endpoint
+class StatusUpdaterThread(threading.Thread):
+    def __init__(self, base_url, status=True, message=None, timeout=120, status_mapping={True: "up", False: "down"}, parameter_name_map={"message": "msg", "status": "status"}, name="status-updater-thread"):
+        self.base_url = base_url
+        self.status = bool(status)
+        self.status_mapping = status_mapping
+        self.param_map = parameter_name_map
+        self.curr_msg = str(message)
+        self.timeout = int(timeout)
+        
+        self._update_event = threading.Event()
+        self._stop_event = threading.Event()
+        self.logger = logging.getLogger(name)
+        
+        super(StatusUpdaterThread, self).__init__(name=name)
+        self.daemon = True
+    
+    def stop(self):
+        self._stop_event.set()
+    
+    def stopped(self):
+        return self._stop_event.is_set()
+    
+    def update_status(self, status, message=None):
+        changed = False
+        
+        if bool(status) != self.status:
+            changed = True
+            self.status = bool(status)
+        
+        if (message is not None) and (str(message) != self.curr_msg):
+            changed = True
+            self.curr_msg = str(message)
+        
+        # If something changed, trigger sending of status update
+        if changed:
+            self._update_event.set()
+    
+    def _send_current_status(self):
+        """ Sends a status update to the endpoint and returns the success as a boolean """
+        
+        if self.curr_msg is None:
+            paramstring = urlparse.urlencode({
+                self.param_map['status']: self.status_mapping[self.status],
+            })
+        else:
+            paramstring = urlparse.urlencode({
+                self.param_map['status']: self.status_mapping[self.status],
+                self.param_map['message']: self.curr_msg,
+            })
+        
+        url = requote_uri(f"{self.base_url}?{paramstring}")
+        
+        try:
+            resp = net.get_request(url)
+        except TimeoutError:
+            self.logger.warning("Timeout while sending status update")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error while sending status update: {str(e)}")
+            return False
+        
+        try:
+            is_ok = json.load(resp)["ok"]
+            
+            if is_ok == False:
+                self.logger.warning("Status Endpoint returned not-ok status")
+            
+            return is_ok
+        except Exception as e:
+            self.logger.error(f"Invalid response: {str(resp)}")
+            return False
+    
+    def run(self):
+        """ Sends status update and waits for either event to fire or timeout seconds """
+        
+        while True:
+            # Exit the loop, if requested to stop
+            if self._stop_event.is_set():
+                break
+            
+            # Send actual status update
+            self._send_current_status()
+            
+            
+            # Wait until update event fires or timeout seconds
+            self._update_event.wait(timeout=self.timeout)
+            self._update_event.clear()
