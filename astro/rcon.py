@@ -255,7 +255,7 @@ class AstroRCON():
             Returns: True if successfully sent command
         """
         
-        return self._sendreceive(f'DSLoadGame {saveName}\n'.encode(), False)
+        return self._sendreceive(f'DSLoadGame {saveName}\n'.encode(), True)
     
     def DSSaveGame(self, name=None):
         """

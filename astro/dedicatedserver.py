@@ -663,35 +663,44 @@ class AstroDedicatedServer:
 
                     elif args["cmd"] == ConsoleParser.Command.SAVEGAME:
                         if args["subcmd"] == ConsoleParser.SaveGameSubcommand.LOAD:
-                            try:
-                                success = self.load_game(args["save_name"])
-                            except Exception as e:
-                                CMD_LOGGER.error(f"Error while executing command: {str(e)}")
-                            
-                            if success:
-                                CMD_LOGGER.info(f"Successfully loaded {args['save_name']}")
+                            if (self.curr_game_list is not None) and (args["save_name"] == self.curr_game_list.activeSaveName):
+                                CMD_LOGGER.warning("Specified save is currently already loaded")
                             else:
-                                CMD_LOGGER.warning("There was a problem while executing the command")
+                                try:
+                                    success = self.load_game(args["save_name"])
+                                    
+                                    if success:
+                                        CMD_LOGGER.info(f"Loading save game '{args['save_name']}'...")
+                                    else:
+                                        CMD_LOGGER.warning("There was a problem while executing the command")
+                                except Exception as e:
+                                    CMD_LOGGER.error(f"Error while executing command: {str(e)}")
+                                    CMD_LOGGER.error(traceback.format_exc())
+                            
                         if args["subcmd"] == ConsoleParser.SaveGameSubcommand.SAVE:
                             try:
                                 success = self.save_game(args["save_name"])
+                                
+                                if success:
+                                    CMD_LOGGER.info("Saving the game...")
+                                else:
+                                    CMD_LOGGER.warning("There was a problem while executing the command")
                             except Exception as e:
                                 CMD_LOGGER.error(f"Error while executing command: {str(e)}")
+                                CMD_LOGGER.error(traceback.format_exc())
                                 
-                            if success:
-                                CMD_LOGGER.info("Successfully saved the game")
-                            else:
-                                CMD_LOGGER.warning("There was a problem while executing the command")
                         if args["subcmd"] == ConsoleParser.SaveGameSubcommand.NEW:
                             try:
                                 success = self.new_game(args["save_name"])
+                                
+                                if success:
+                                    CMD_LOGGER.info("Creating new save game...")
+                                else:
+                                    CMD_LOGGER.warning("There was a problem while executing the command")
                             except Exception as e:
                                 CMD_LOGGER.error(f"Error while executing command: {str(e)}")
+                                CMD_LOGGER.error(traceback.format_exc())
                                 
-                            if success:
-                                CMD_LOGGER.info("Successfully created a new save game")
-                            else:
-                                CMD_LOGGER.warning("There was a problem while executing the command")
                         if args["subcmd"] == ConsoleParser.SaveGameSubcommand.LIST:
                             if self.curr_game_list is not None:
                                 
@@ -728,7 +737,8 @@ class AstroDedicatedServer:
                     # Send notification event after executing command
                     self.launcher.notifications.send_event(EventType.COMMAND, command=args["cmdline"], server_version=self.build_version)
                 except Exception as e:
-                    LOGGER.error(f"Error occured while executing command: {str(e)}")
+                    CMD_LOGGER.error(f"Error occured while executing command: {str(e)}")
+                    CMD_LOGGER.error(traceback.format_exc())
             
             # If we didn't do an update, wait a short while. This reduces the CPU usage of the launcher
             if not update_server_data:
@@ -1060,21 +1070,33 @@ class AstroDedicatedServer:
         if not isinstance(res, dict):
             return False
         
-        self.curr_server_stat = ServerStatistics.from_dict(res)
+        try:
+            self.curr_server_stat = ServerStatistics.from_dict(res)
+        except Exception as e:
+            LOGGER.error(f"Error while decoding received server statistics: {type(e)}: {str(e)}")
+            LOGGER.debug(f"Received response: {json.dumps(res)}")
         
         res = self.rcon.DSListPlayers()
         
         if not isinstance(res, dict):
             return False
         
-        self.curr_player_list = PlayerList.from_dict(res)
+        try:
+            self.curr_player_list = PlayerList.from_dict(res)
+        except Exception as e:
+            LOGGER.error(f"Error while decoding received player list: {type(e)}: {str(e)}")
+            LOGGER.debug(f"Received response: {json.dumps(res)}")
         
         res = self.rcon.DSListGames()
         
         if not isinstance(res, dict):
             return False
         
-        self.curr_game_list = GameList.from_dict(res)
+        try:
+            self.curr_game_list = GameList.from_dict(res)
+        except Exception as e:
+            LOGGER.error(f"Error while decoding received savegame list: {type(e)}: {str(e)}")
+            LOGGER.debug(f"Received response: {json.dumps(res)}")
         
         return True
     
@@ -1121,32 +1143,31 @@ class AstroDedicatedServer:
                     found = True
             
             if not found:
+                LOGGER.debug("Savegame not found")
                 return False
         
         if not pathvalidate.is_valid_filename(save_name):
             raise ValueError(f"'{save_name}' is not a valid savegame name")
         
-        res = self.rcon.DSLoadGame(save_name)
-        
-        if not res:
+        if (self.curr_game_list is not None) and (save_name == self.curr_game_list.activeSaveName):
+            LOGGER.debug("Save is already loaded, RCON command would fail, aborting")
             return False
         
-        # Wait until the save is loaded (is the active save)
-        active_save_name = None
+        res = self.rcon.DSLoadGame(save_name)
         
-        tries = 0   # Maximum of 15 tries
+        if not isinstance(res, dict):
+            LOGGER.debug(f"DSLoadGame result was not a dict: {str(res)}")
+            return False
         
-        while (active_save_name != save_name) and (tries < 15):
-            res = self.rcon.DSListGames()
-            
-            if not isinstance(res, dict):
-                return False
-            
-            active_save_name = res["activeSaveName"]
-            tries += 1
-            time.sleep(0.01)
+        if "status" not in res:
+            LOGGER.debug(f"DSLoadGame response didn't conmtain 'status' key: {str(res)}")
+            return False
         
-        return True
+        if res["status"] == True:
+            return True
+        else:
+            LOGGER.debug(f"DSLoadGame failed: {res['_message']}")
+            return False
     
     def new_game(self, name=None):
         """
