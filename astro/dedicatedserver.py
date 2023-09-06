@@ -653,11 +653,21 @@ class AstroDedicatedServer:
                             else:
                                 category = PlayerCategory[args["category"].name]
                             
-                            CMD_LOGGER.info("Online Players:")
+                            # Filter players based on online status and category
+                            filtered_players = []
                             
                             for pi in self.curr_player_list.playerInfo:
                                 if pi.inGame and ((category is None) or (category == pi.playerCategory)):
-                                    CMD_LOGGER.info(f"    - {pi.playerName}({pi.playerGuid})")
+                                    filtered_players.append(pi)
+                            
+                            # Output player info
+                            if category is None:
+                                CMD_LOGGER.info(f"Online Players ({len(filtered_players)}):")
+                            else:
+                                CMD_LOGGER.info(f"Online '{category.value}' Players ({len(filtered_players)}):")
+                            
+                            for pi in filtered_players:
+                                CMD_LOGGER.info(f"    - {pi.playerName}({pi.playerGuid})")
                         else:
                             CMD_LOGGER.info("Player information not available right now")
 
