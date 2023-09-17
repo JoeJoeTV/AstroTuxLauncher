@@ -65,7 +65,9 @@ def generate_XAuth(serverGUID):
         "TitleId": "5EA1"
     }
     
-    response = json.load(post_request(url, headers=base_headers, jsonData=requestObject))
+    response = post_request(url, headers=base_headers, jsonData=requestObject)
+    LOGGER.debug(f"Response for first XAuth request: {str(response)}")
+    response = json.load(response)
     
     # If account doesn't exist, create new one
     if (response["code"] == 400) and (response["error"] == "AccountNotFound"):
@@ -73,7 +75,9 @@ def generate_XAuth(serverGUID):
         
         requestObject["CreateAccount"] = True
         
-        response = json.load(post_request(url, headers=base_headers, jsonData=requestObject))
+        response = post_request(url, headers=base_headers, jsonData=requestObject)
+        LOGGER.debug(f"Response for second XAuth request: {str(response)}")
+        response = json.load(response)
     
     return response["data"]["SessionTicket"]
 

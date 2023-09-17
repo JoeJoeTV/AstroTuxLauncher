@@ -517,7 +517,10 @@ class AstroDedicatedServer:
             
             # Ensure XAuth is present
             if update_server_data:
-                self.get_XAuth()
+                try:
+                    self.get_XAuth()
+                except Exception as e:
+                    LOGGER.error(str(e))
             
             #TODO: Get info from Playfab API
             
@@ -587,6 +590,8 @@ class AstroDedicatedServer:
                             # If save was not changed, check if server saved the game
                             if active_save_time != prev_active_save_time:
                                 self.launcher.notifications.send_event(EventType.SAVE, savegame_name=active_save_name, server_version=self.build_version)
+                    else:
+                        LOGGER.error("Error while getting data from dedicated server")
                 except Exception as e:
                     LOGGER.debug(f"Error while doing status update: {str(e)}")
                     LOGGER.error(traceback.format_exc())
@@ -768,7 +773,7 @@ class AstroDedicatedServer:
         
         ip_port_combo = f"{self.ds_config.PublicIP}:{self.engine_config.Port}"
         
-        # Ensure XAuth is present  
+        # Ensure XAuth is present
         self.get_XAuth()
         
         # Deregister all still with playfab registered servers to avoid issues
@@ -1231,7 +1236,7 @@ class AstroDedicatedServer:
             # While getting XAuth wasn't successful, retry
             while XAuth is None:
                 if tries <= 0:
-                    LOGGER.error("Unable to get XAuth token after aeveral tries.  Are you connected to the internet?")
+                    LOGGER.error("Unable to get XAuth token after several tries.  Are you connected to the internet?")
                     raise TimeoutError("Gave up after several tries while generating XAuth token")
                 
                 try:
@@ -1242,6 +1247,8 @@ class AstroDedicatedServer:
                     
                     # If not successful, wait 10 seconds
                     time.sleep(10)
+                finally:
+                    tries -= 1
             
             self.curr_xauth = XAuth
             self.time_last_xauth = datetime.now()
