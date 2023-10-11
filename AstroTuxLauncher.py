@@ -557,6 +557,10 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Quitting... (requested by user)")
         sys.exit(0)
+    except Exception as e:
+        print(f"Error while initializing launcher on line {sys.exc_info()[-1].tb_lineno}: {type(err).__name__}: {e}")
+        print("Quitting...")
+        sys.exit(1)
     
     signal.signal(signal.SIGINT, launcher.user_exit)
     
@@ -567,10 +571,19 @@ if __name__ == "__main__":
     
     if args.command == LauncherCommand.INSTALL:
         LOGGER.info("Installing Astroneer Dedicated Server...")
-        launcher.update_server()
+        try:
+            launcher.update_server()
+        except Exception as e:
+            LOGGER.critical(f"Error while installing server on line {sys.exc_info()[-1].tb_lineno}: {type(err).__name__}: {e}")
+            sys.exit(1)
     elif args.command == LauncherCommand.UPDATE:
         LOGGER.info("Checking for available updates to the Astroneer Dedicated Server...")
-        launcher.check_server_update(force_update=True)
+        
+        try:
+            launcher.check_server_update(force_update=True)
+        except Exception as e:
+            LOGGER.critical(f"Error while updating server on line {sys.exc_info()[-1].tb_lineno}: {type(err).__name__}: {e}")
+            sys.exit(1)
     elif args.command == LauncherCommand.START:
         try:
             launcher.start_server()
