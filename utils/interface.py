@@ -17,8 +17,27 @@ import utils.net as net
 import json
 from requests.utils import requote_uri
 import urllib.parse as urlparse
+from utils.termutils import ANSI
 
-DOTS_SPINNER = frame_spinner_factory("⣷⣯⣟⡿⢿⣻⣽⣾")
+# Hack to detect wether UTF-8 symbols in the progress bar will cause problems
+def _check_fancy_symbol_support():
+    try:
+        print('\u28f7', end="", flush=True)
+        ANSI.clear_line()
+        print("\r", end="", flush=True)
+        return True
+    except UnicodeEncodeError:
+        return False
+
+# Print character that causes problems and if an error occurs, we turn off fancy symbol support for progress bars
+ENABLE_FANCY_PROGRESS_SYMBOLS = _check_fancy_symbol_support()
+
+if ENABLE_FANCY_PROGRESS_SYMBOLS:
+    AP_SPINNER = frame_spinner_factory("⣷⣯⣟⡿⢿⣻⣽⣾")
+    AP_BAR = "smooth"
+else:
+    AP_SPINNER = "classic"
+    AP_BAR = "classic"
 
 LOGGER = logging.getLogger("Interface")
 

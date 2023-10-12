@@ -19,7 +19,7 @@ import subprocess
 import pathvalidate
 import time
 import astro.playfab as playfab
-from utils.interface import EventType, ConsoleParser, ProcessOutputThread, DOTS_SPINNER
+from utils.interface import EventType, ConsoleParser, ProcessOutputThread, AP_SPINNER
 import psutil
 from enum import Enum
 import socket
@@ -800,7 +800,7 @@ class AstroDedicatedServer:
         wait_time = self.launcher.config.PlayfabAPIInterval
         
         # Wait for DS to finish registration
-        with alive_bar(title="Waiting for Dedicated Server to register with Playfab", spinner=DOTS_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False, force_tty=CONTROL_CODES_SUPPORTED) as bar:
+        with alive_bar(title="Waiting for Dedicated Server to register with Playfab", spinner=AP_SPINNER, bar=None, receipt=True, enrich_print=False, monitor=False, stats=False, force_tty=CONTROL_CODES_SUPPORTED) as bar:
             while not self.registered:
                 # Print all lines currently in process output queue
                 while True:
