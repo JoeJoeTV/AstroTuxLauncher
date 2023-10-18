@@ -41,7 +41,7 @@ def encode_fakefloat(num):
 def decode_fakefloat(string):
     return round(float(string))
 
-class PlayerProperties:
+class PlayerPropertiesEntry:
     """ Class representing a PlayerProperties list entry used in the DS config """
     
     ATTRIBUTES = {
@@ -58,12 +58,12 @@ class PlayerProperties:
         self.PlayerRecentJoinName = PlayerRecentJoinName
     
     def to_string(self):
-        """ Return string representation of PlayerProperties Object """
+        """ Return string representation of PlayerPropertiesEntry Object """
         return f'(PlayerFirstJoinName="{self.PlayerFirstJoinName}",PlayerCategory={self.PlayerCategory.value},PlayerGuid="{self.PlayerGuid}",PlayerRecentJoinName="{self.PlayerRecentJoinName}")'
     
     @staticmethod
     def from_string(string):
-        """ Create a PlayerProperties object from string stored in DS config """
+        """ Create a PlayerPropertiesEntry object from string stored in DS config """
         # Find string encased by parenthesies
         match = re.search(r"\((.*)\)", string)
         
@@ -81,7 +81,7 @@ class PlayerProperties:
             
             # If no '=' found, the string is invalid
             if len(arg) != 2:
-                raise ValueError("Invalid PlayerProperties string string")
+                raise ValueError("Invalid PlayerProperties string")
             
             key = arg[0].strip()
             value = arg[1].strip()
@@ -91,19 +91,19 @@ class PlayerProperties:
             
             # If key is a recognized argument, cast to correct type
             # Ignore keys that are unknown
-            if key in PlayerProperties.ATTRIBUTES:
-                atype = PlayerProperties.ATTRIBUTES[key]
+            if key in PlayerPropertiesEntry.ATTRIBUTES:
+                atype = PlayerPropertiesEntry.ATTRIBUTES[key]
                 
                 kwargs[key] = atype(value)
         
-        pe = PlayerProperties(**kwargs)
+        pe = PlayerPropertiesEntry(**kwargs)
         
         return pe
 
     # See https://github.com/lidatong/dataclasses-json/issues/122
     @staticmethod
     def list_encoder(pp_list):
-        """ Encode list of PlayerProperties objects into string list to be used by dataclass """
+        """ Encode list of PlayerPropertiesEntry objects into string list to be used by dataclass """
         
         # If length of list is one, just encode as string instead of list with single element
         if len(pp_list) == 1:
@@ -114,22 +114,22 @@ class PlayerProperties:
     # See https://github.com/lidatong/dataclasses-json/issues/122
     @staticmethod
     def list_decoder(value):
-        """ Decode list of strings into list of PlayerProperties """
+        """ Decode list of strings into list of PlayerPropertiesEntry """
         # Directly return value, if already decoded
-        if value and isinstance(value[0], PlayerProperties):
+        if value and isinstance(value[0], PlayerPropertiesEntry):
             return value
         
         # If only one item is present, value will just be a string, so we only have one item
         if value and isinstance(value, str):
-            return [PlayerProperties.from_string(value)]
+            return [PlayerPropertiesEntry.from_string(value)]
         
-        return [PlayerProperties.from_string(pp_str) for pp_str in value]
+        return [PlayerPropertiesEntry.from_string(pp_str) for pp_str in value]
 
 # Metadata for PlayerProperties List field
 pp_list_field = {
     "dataclasses_json": {
-        "encoder": PlayerProperties.list_encoder,
-        "decoder": PlayerProperties.list_decoder,
+        "encoder": PlayerPropertiesEntry.list_encoder,
+        "decoder": PlayerPropertiesEntry.list_decoder,
     }
 }
 
@@ -159,7 +159,7 @@ class DedicatedServerConfig:
     ConsolePassword: str = uuid.uuid4().hex
     HeartbeatInterval: int = 55
     ExitSemaphore: Optional[str] = field(metadata=config(exclude=ExcludeIfNone), default=None)
-    PlayerProperties: list[PlayerProperties] = field(default_factory=list, metadata=pp_list_field)
+    PlayerProperties: list[PlayerPropertiesEntry] = field(default_factory=list, metadata=pp_list_field)
     
     @staticmethod
     def ensure_config(config_path, overwrite_ip=False):

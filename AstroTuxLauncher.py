@@ -118,10 +118,10 @@ class LauncherConfig:
     OverwritePublicIP: bool = False # Wether to overwrite the PublicIP DS config option with the fetched public IP
     
     # Settings related to notifications
-    notifications: NotificationConfig = NotificationConfig()    # Configuration for notifications
+    notifications: NotificationConfig = field(default_factory=NotificationConfig)    # Configuration for notifications
     
     # Settings related to sending status updates
-    status: StatusConfig = StatusConfig()
+    status: StatusConfig = field(default_factory=StatusConfig)
     
     LogDebugMessages: bool = False  # Wether the the console and log file should include log messages with level logging.DEBUG
     
