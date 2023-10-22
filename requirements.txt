@@ -7,5 +7,6 @@ packaging
 pansi
 pathvalidate
 psutil
+Requests
 tomli
 tomli_w
