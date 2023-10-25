@@ -540,6 +540,7 @@ if __name__ == "__main__":
     if (sys.version_info.major < 3) or ((sys.version_info.major == 3) and (sys.version_info.minor < 9)):
         print()
         print("ERROR: AstroTuxLauncher needs at least Python 3.9 to run properly!")
+        print(f"    You are currently running version {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}.")
         print()
         sys.exit(1)
     
