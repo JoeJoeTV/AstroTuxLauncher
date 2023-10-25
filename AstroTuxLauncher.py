@@ -8,7 +8,7 @@ import tomli, tomli_w
 import dataclasses
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config
-from typing import Optional
+from typing import Optional, List
 from utils.misc import ExcludeIfNone, read_build_version, LAUNCHER_VERSION, CONTROL_CODES_SUPPORTED
 from utils.termutils import set_window_title
 from enum import Enum
@@ -98,7 +98,7 @@ class NTFYConfig:
 class NotificationConfig:
     method: NotificationMethod = NotificationMethod.NONE
     name: str = "Astroneer Dedicated Server"
-    EventWhitelist: list[interface.EventType] = field(default_factory=lambda: [e for e in interface.EventType])
+    EventWhitelist: List[interface.EventType] = field(default_factory=lambda: [e for e in interface.EventType])
     
     discord: Optional[DiscordConfig] = field(metadata=config(exclude=ExcludeIfNone), default=None)
     ntfy: Optional[NTFYConfig] = field(metadata=config(exclude=ExcludeIfNone), default=None)

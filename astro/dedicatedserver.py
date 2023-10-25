@@ -159,7 +159,7 @@ class DedicatedServerConfig:
     ConsolePassword: str = uuid.uuid4().hex
     HeartbeatInterval: int = 55
     ExitSemaphore: Optional[str] = field(metadata=config(exclude=ExcludeIfNone), default=None)
-    PlayerProperties: list[PlayerPropertiesEntry] = field(default_factory=list, metadata=pp_list_field)
+    PlayerProperties: List[PlayerPropertiesEntry] = field(default_factory=list, metadata=pp_list_field)
     
     @staticmethod
     def ensure_config(config_path, overwrite_ip=False):
@@ -228,7 +228,7 @@ class DedicatedServerConfig:
 class EngineConfig:
     Port: int = 7777
     AllowEncryption: bool = False
-    Paths: list[str] = field(default_factory=list)
+    Paths: List[str] = field(default_factory=list)
     MaxClientRate: int = 1000000
     MaxInternetClientRate: int = 1000000
     
@@ -355,7 +355,7 @@ class PlayerInfo:
 class PlayerList:
     """ Stores the current data received from the 'DSListPlayers' RCON command """
     
-    playerInfo: list[PlayerInfo] = field(default_factory=list)
+    playerInfo: List[PlayerInfo] = field(default_factory=list)
 
 
 def encoder_datetime_gameinfo(dt):
@@ -376,7 +376,7 @@ class GameList:
     """ Stores the current data received from the 'DSListGames' RCON command """
     
     activeSaveName: str = None
-    gameList: list[GameInfo] = field(default_factory=list)
+    gameList: List[GameInfo] = field(default_factory=list)
 
 class ServerStatus(Enum):
     OFF = "off"
