@@ -27,6 +27,7 @@ import utils.net as net
 import signal
 import subprocess
 import time
+import traceback
 
 
 """
@@ -176,6 +177,9 @@ class LauncherConfig:
 class AstroTuxLauncher():
     
     def __init__(self, config_path, astro_path, depotdl_exec, force_debug_log=False):
+        self.dedicatedserver = None
+        self.status_thread = None
+        
         # Setup basic logging
         interface.LauncherLogging.prepare()
         interface.LauncherLogging.setup_console()
@@ -520,10 +524,13 @@ class AstroTuxLauncher():
                 LOGGER.info("Quitting...")
             
             # Kill server if it's running or not
-            self.dedicatedserver.kill()
+            if self.dedicatedserver:
+                self.dedicatedserver.kill()
             
             # Give short time to send status update
-            self.status_thread.update_status(status=False, message="Server was forcibly closed")
+            if self.status_thread:
+                self.status_thread.update_status(status=False, message="Server was forcibly closed")
+            
             time.sleep(0.1)
             
             sys.exit(1)
@@ -558,7 +565,8 @@ if __name__ == "__main__":
         print("Quitting... (requested by user)")
         sys.exit(0)
     except Exception as e:
-        print(f"Error while initializing launcher on line {sys.exc_info()[-1].tb_lineno}: {type(err).__name__}: {e}")
+        print(f"Error while initializing launcher on line {sys.exc_info()[-1].tb_lineno}: {type(e).__name__}: {e}")
+        print(traceback.format_exc())
         print("Quitting...")
         sys.exit(1)
     
@@ -574,7 +582,8 @@ if __name__ == "__main__":
         try:
             launcher.update_server()
         except Exception as e:
-            LOGGER.critical(f"Error while installing server on line {sys.exc_info()[-1].tb_lineno}: {type(err).__name__}: {e}")
+            LOGGER.critical(f"Error while installing server on line {sys.exc_info()[-1].tb_lineno}: {type(e).__name__}: {e}")
+            LOGGER.error(traceback.format_exc())
             sys.exit(1)
     elif args.command == LauncherCommand.UPDATE:
         LOGGER.info("Checking for available updates to the Astroneer Dedicated Server...")
@@ -582,7 +591,8 @@ if __name__ == "__main__":
         try:
             launcher.check_server_update(force_update=True)
         except Exception as e:
-            LOGGER.critical(f"Error while updating server on line {sys.exc_info()[-1].tb_lineno}: {type(err).__name__}: {e}")
+            LOGGER.critical(f"Error while updating server on line {sys.exc_info()[-1].tb_lineno}: {type(e).__name__}: {e}")
+            LOGGER.error(traceback.format_exc())
             sys.exit(1)
     elif args.command == LauncherCommand.START:
         try:
