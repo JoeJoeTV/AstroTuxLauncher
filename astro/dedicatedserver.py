@@ -646,6 +646,7 @@ class AstroDedicatedServer:
                             if success:
                                 CMD_LOGGER.info("Successfully disabled whitelist")
                         elif args["subcmd"] == ConsoleParser.WhitelistSubcommand.STATUS:
+                            success = True
                             CMD_LOGGER.info(f"The whitelist is currently {'enabled' if self.curr_server_stat.isEnforcingWhitelist else 'disabled'}")
                         
                         if not success:
