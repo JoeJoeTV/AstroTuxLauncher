@@ -36,7 +36,7 @@ def check_api_health():
         Returns: A boolean value indicating if the API is available
     """
     
-    url = "https://5ea1.playfabapi.com/"
+    url = "https://5ea1.playfabapi.com/healthstatus"
     
     try:
         resp = json.load(get_request(url))
