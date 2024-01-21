@@ -34,6 +34,14 @@ Launcher and management utility for running an Astroneer Dedicated Server on Lin
     python3 AstroTuxLauncher.py start
     ```
 
+## Updating
+
+If a new version of AstroTuxLauncher has been released and git was used to clone the repository, an update can simply be performed by using git:
+
+```sh
+git pull
+```
+
 ## Notice about Encryption
 
 Currently, the Launcher disables encryption for the Astroneer Dedicated Server by default. This is required as the Server doesn't work with encryption enabled running under WINE.
