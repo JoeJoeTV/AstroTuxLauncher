@@ -1,5 +1,5 @@
 import os
-import termutils
+import utils.terminal
 
 # 
 # File: common.py

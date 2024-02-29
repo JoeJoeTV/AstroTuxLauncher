@@ -1,3 +1,7 @@
+# 
+# File: utils/terminal.py
+# Description: Utilities for working with terminal input/output
+#
 
 from sys import stdin, stdout
 from platform import system
