@@ -64,7 +64,7 @@ HELP_COMMAND = f"""What {NAME} should do
 DEPOTDL_PATH = "libs/depotdownloader"
 DS_EXECUTABLE = "AstroServer.exe"
 
-ASTRO_SERVER_STATS_URL = "https://servercheck.spycibot.com/stats"
+ASTRO_SERVER_STATS_URL = "https://astroneermods.space/tools/servercheck/stats"
 
 class LauncherCommand(Enum):
     """ Represents the command passed to the launcher """
@@ -416,7 +416,7 @@ class AstroTuxLauncher():
             # Get current server version from Spycibot endpoint
             try:
                 data = json.load(get_request(ASTRO_SERVER_STATS_URL))
-                newversion = data["LatestVersion"]
+                newversion = data["stats"]["LatestVersion"]
                 
                 if version.parse(newversion) > version.parse(oldversion):
                     LOGGER.warning(f"Astroneer Dedicated Server update available ({oldversion} -> {newversion})")
