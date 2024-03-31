@@ -34,7 +34,10 @@ def check_api_health() -> bool:
     url = f"{PLAYFAB_ASTRO_URL}/healthstatus"
     
     try:
-        response = requests.get(url).json()
+        response = requests.get(url)
+        # If error status code returned, raise exception first, so its not reported as a JSONDecodeError
+        response.raise_for_status()
+        response = response.json()
         
         return response["Healthy"] == True
     except (requests.RequestException, KeyError) as e:
@@ -60,7 +63,10 @@ def generate_xauth(server_guid: str) -> str:
     }
     
     try:
-        response = requests.post(url, headers=BASE_HEADERS, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
+        response = requests.post(url, headers=BASE_HEADERS, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']})
+        # If error status code returned, raise exception first, so its not reported as a JSONDecodeError
+        response.raise_for_status()
+        response = response.json()
         
         # If account doesn't exist, create new one
         if (response["code"] == 400) and (response["error"] == "AccountNotFound"):
@@ -68,7 +74,10 @@ def generate_xauth(server_guid: str) -> str:
             
             request_object["CreateAccount"] = True
             
-            response = requests.post(url, headers=BASE_HEADERS, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
+            response = requests.post(url, headers=BASE_HEADERS, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']})
+            # If error status code returned, raise exception first, so its not reported as a JSONDecodeError
+            response.raise_for_status()
+            response = response.json()
         
         return response["data"]["SessionTicket"]
     except (requests.RequestException, KeyError) as e:
@@ -101,7 +110,10 @@ def get_server(ip_port_combo: str, xauth: str) -> dict:
     headers["X-Authorization"] = xauth
     
     try:
-        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
+        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']})
+        # If error status code returned, raise exception first, so its not reported as a JSONDecodeError
+        response.raise_for_status()
+        response = response.json()
         
         return dict(response)
     except requests.RequestException as e:
@@ -134,7 +146,10 @@ def deregister_server(lobby_id: str, xauth: str) -> dict:
     headers["X-Authorization"] = xauth
     
     try:
-        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
+        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']})
+        # If error status code returned, raise exception first, so its not reported as a JSONDecodeError
+        response.raise_for_status()
+        response = response.json()
         
         return dict(response)
     except requests.RequestException as e:
@@ -182,7 +197,10 @@ def heartbeat_server(server_data: dict, xauth: str, data_to_change: dict = None)
         request_object['FunctionParameter'].update(data_to_change)
     
     try:
-        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
+        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']})
+        # If error status code returned, raise exception first, so its not reported as a JSONDecodeError
+        response.raise_for_status()
+        response = response.json()
         
         return dict(response)
     except requests.RequestException as e:
