@@ -483,7 +483,7 @@ class AstroTuxLauncher():
         
         # If sending of status updates is enabled, start thread
         if self.config.status.SendStatus:
-            LOGGER.info("Sending of status updated is enabled")
+            LOGGER.info("Sending of status updates is enabled")
             self.status_thread.start()
         
         # Run Server Loop
