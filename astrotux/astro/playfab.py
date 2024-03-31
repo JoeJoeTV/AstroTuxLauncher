@@ -4,7 +4,8 @@
 # Note: This file is heavily based upon AstroAPI.py from [AstroLauncher](https://github.com/ricky-davis/AstroLauncher)
 #
 
-from ..utils.net import get_request, post_request
+from ..utils.misc import GeneralError
+import requests
 import logging
 
 LOGGER = logging.getLogger("Playfab")
@@ -18,7 +19,7 @@ BASE_HEADERS = {
 PLAYFAB_ASTRO_TITLEID = "5EA1"
 PLAYFAB_ASTRO_URL = f"https://{PLAYFAB_ASTRO_TITLEID}.playfabapi.com"
 
-class PlayfabAPIError(Exception):
+class PlayfabAPIError(General):
     def __init__(self, message="An error occured while interacting with the Playfab API"):
         self.message = message
         super().__init__(self.message)
@@ -33,12 +34,11 @@ def check_api_health() -> bool:
     url = f"{PLAYFAB_ASTRO_URL}/healthstatus"
     
     try:
-        response = get_request(url)
-        response = json.load(response)
+        response = requests.get(url).json()
         
         return response["Healthy"] == True
-    except Exception as e:
-        raise PlayfabAPIError(f"Error while checking for Playfab API health: {str(e)}")
+    except (requests.RequestException, KeyError) as e:
+        raise PlayfabAPIError("Error while checking for Playfab API health") from e
 
 def generate_xauth(server_guid: str) -> str:
     """
@@ -50,7 +50,7 @@ def generate_xauth(server_guid: str) -> str:
         Returns: A session ticket to be used as X-Authorization in further requests
     """
     
-    url = f"{PLAYFAB_ASTRO_URL}/Client/LoginWithCustomID?sdk={BASE_HEADERS['X-PlayFabSDK']}"
+    url = f"{PLAYFAB_ASTRO_URL}/Client/LoginWithCustomID"
     
     # First, check for existing account
     request_object = {
@@ -59,19 +59,20 @@ def generate_xauth(server_guid: str) -> str:
         "TitleId": PLAYFAB_ASTRO_TITLEID
     }
     
-    response = post_request(url, headers=base_headers, jsonData=request_object)
-    response = json.load(response)
-    
-    # If account doesn't exist, create new one
-    if (response["code"] == 400) and (response["error"] == "AccountNotFound"):
-        time.sleep(0.2)
+    try:
+        response = requests.post(url, headers=BASE_HEADERS, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
         
-        request_object["CreateAccount"] = True
+        # If account doesn't exist, create new one
+        if (response["code"] == 400) and (response["error"] == "AccountNotFound"):
+            time.sleep(0.2)
+            
+            request_object["CreateAccount"] = True
+            
+            response = requests.post(url, headers=BASE_HEADERS, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
         
-        response = post_request(url, headers=base_headers, jsonData=request_object)
-        response = json.load(response)
-    
-    return response["data"]["SessionTicket"]
+        return response["data"]["SessionTicket"]
+    except (requests.RequestException, KeyError) as e:
+        raise PlayfabAPIError("Error while getting XAuth token") from e
 
 def get_server(ip_port_combo: str, xauth: str) -> dict:
     """
@@ -84,7 +85,7 @@ def get_server(ip_port_combo: str, xauth: str) -> dict:
         Returns: The requested data or an error status object
     """
     
-    url = f"{PLAYFAB_ASTRO_URL}/Client/GetCurrentGames?sdk={BASE_HEADERS['X-PlayFabSDK']}"
+    url = f"{PLAYFAB_ASTRO_URL}/Client/GetCurrentGames"
     
     # Only return servers that have a matching IP/Port combination
     request_object = {
@@ -100,12 +101,11 @@ def get_server(ip_port_combo: str, xauth: str) -> dict:
     headers["X-Authorization"] = xauth
     
     try:
-        response = post_request(url, headers=headers, jsonData=request_object)
-        response = json.load(response)
+        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
         
         return dict(response)
-    except Exception as e:
-        raise PlayfabAPIError(f"Error while getting server from Playfab API: {str(e)}")
+    except requests.RequestException as e:
+        raise PlayfabAPIError("Error while getting server from Playfab API") from e
 
 def deregister_server(lobby_id: str, xauth: str) -> dict:
     """
@@ -118,7 +118,7 @@ def deregister_server(lobby_id: str, xauth: str) -> dict:
         Returns: The status of the operation or an object containing an error status
     """
     
-    url = f"{PLAYFAB_ASTRO_URL}/Client/ExecuteCloudScript?sdk={BASE_HEADERS['X-PlayFabSDK']}"
+    url = f"{PLAYFAB_ASTRO_URL}/Client/ExecuteCloudScript"
     
     # Deregister Server with matching lobbyID
     request_object = {
@@ -134,12 +134,11 @@ def deregister_server(lobby_id: str, xauth: str) -> dict:
     headers["X-Authorization"] = xauth
     
     try:
-        response = post_request(url, headers=headers, jsonData=request_object)
-        response = json.load(response)
+        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
         
         return dict(response)
-    except Exception as e:
-        raise PlayfabAPIError(f"Error while deregistering server from Playfab API: {str(e)}")
+    except requests.RequestException as e:
+        raise PlayfabAPIError("Error while deregistering server from Playfab API") from e
 
 def heartbeat_server(server_data: dict, xauth: str, data_to_change: dict = None) -> dict:
     """
@@ -153,7 +152,7 @@ def heartbeat_server(server_data: dict, xauth: str, data_to_change: dict = None)
         Returns: The status of the operation or an object containing an error status
     """
     
-    url = f"{PLAYFAB_ASTRO_URL}/Client/ExecuteCloudScript?sdk={BASE_HEADERS['X-PlayFabSDK']}"
+    url = f"{PLAYFAB_ASTRO_URL}/Client/ExecuteCloudScript"
     
     # Deregister Server with matching lobbyID
     request_object = {
@@ -183,10 +182,9 @@ def heartbeat_server(server_data: dict, xauth: str, data_to_change: dict = None)
         request_object['FunctionParameter'].update(data_to_change)
     
     try:
-        response = post_request(url, headers=headers, jsonData=request_object)
-        response = json.load(response)
+        response = requests.post(url, headers=headers, json=request_object, params={'sdk': BASE_HEADERS['X-PlayFabSDK']}).json()
         
         return dict(response)
-    except Exception as e:
-        raise PlayfabAPIError(f"Error while sending hearbeat to Playfab API: {str(e)}")
+    except requests.RequestException as e:
+        raise PlayfabAPIError("Error while sending hearbeat to Playfab API") from e
     
