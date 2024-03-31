@@ -416,7 +416,7 @@ class AstroTuxLauncher():
             # Get current server version from Spycibot endpoint
             try:
                 data = json.load(get_request(ASTRO_SERVER_STATS_URL))
-                newversion = data["stats"]["LatestVersion"]
+                newversion = data["stats"]["latestVersion"]
                 
                 if version.parse(newversion) > version.parse(oldversion):
                     LOGGER.warning(f"Astroneer Dedicated Server update available ({oldversion} -> {newversion})")
