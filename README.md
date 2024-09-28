@@ -93,7 +93,7 @@ DisableEncryption = true
 # Settings related to sending notifications to external services
 [launcher.notifications]
 
-# ("none"/"discord"/"ntfy") What service to send notifications to
+# (""(None)/"discord"/"ntfy") What service to send notifications to
 method = "ntfy"
 
 # (String) Name of the server to use in notifications
