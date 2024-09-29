@@ -39,9 +39,9 @@ LOGGER = logging.getLogger("Launcher")
 BANNER_LOGO = f"""{ansi.weight.bold}
     {ansi.BLUE}___         __           {ansi.YELLOW}______          
    {ansi.BLUE}/   |  _____/ /__________{ansi.YELLOW}/_  __/_  ___  __
-  {ansi.BLUE}/ /| | / ___/ __/ ___/ __ \{ansi.YELLOW}/ / / / / / |/_/
+  {ansi.BLUE}/ /| | / ___/ __/ ___/ __ \\{ansi.YELLOW}/ / / / / / |/_/
  {ansi.BLUE}/ ___ |(__  ) /_/ /  / /_/ {ansi.YELLOW}/ / / /_/ />  <  
-{ansi.BLUE}/_/  |_/____/\__/_/   \____{ansi.YELLOW}/_/  \__,_/_/|_|  {ansi.reset}
+{ansi.BLUE}/_/  |_/____/\\__/_/   \\____{ansi.YELLOW}/_/  \\__,_/_/|_|  {ansi.reset}
 """
 BANNER_SUBTITLE = "L a u n c h e r".center(45)
 
@@ -197,7 +197,7 @@ class AstroTuxLauncher():
         
         # If cli parameter is specified, it overrides the config value
         if not (astro_path is None):
-            self.config = dataclasses.replace(self.config, {"AstroServerPath": astro_path})
+            self.config = dataclasses.replace(self.config, AstroServerPath=astro_path)
         
         # If flag was passed, overrule config option
         if force_debug_log:
