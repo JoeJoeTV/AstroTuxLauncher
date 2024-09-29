@@ -1,7 +1,7 @@
 from os import path
 import os
 
-LAUNCHER_VERSION="1.1.8"
+LAUNCHER_VERSION="1.1.9"
 
 CONTROL_CODES_SUPPORTED = None
 
