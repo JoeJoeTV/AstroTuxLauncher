@@ -5,7 +5,7 @@ Launcher and management utility for running an Astroneer Dedicated Server on Lin
 
 ## Prerequisites
 
-- **Python 3.9+** (Tested with 3.9.5, 3.10.12, 3.11.0rc1; Please report compatibility problems)
+- **Python 3.9+** (Tested with 3.9.5, 3.10.12, 3.11.0rc1, 3.12.3; Please report compatibility problems)
 - Python packages in `requirements.txt`
 - Wine
 - A public IP or something like playit.gg
