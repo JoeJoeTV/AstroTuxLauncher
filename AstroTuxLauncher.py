@@ -64,7 +64,7 @@ HELP_COMMAND = f"""What {NAME} should do
 DEPOTDL_PATH = "libs/depotdownloader"
 DS_EXECUTABLE = "AstroServer.exe"
 
-ASTRO_SERVER_STATS_URL = "https://astroneermods.space/tools/servercheck/api/stats"
+ASTRO_SERVER_STATS_URL = "https://astroservercheck.joejoetv.de/api/stats"
 
 class LauncherCommand(Enum):
     """ Represents the command passed to the launcher """

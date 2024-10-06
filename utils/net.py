@@ -232,7 +232,7 @@ def net_test_nonlocal(ip, port):
     
     # Use external service to test connection
     try:
-        resp = get_request(f"https://astroneermods.space/tools/servercheck/api/check?url={ip}:{port}", timeout=10)
+        resp = get_request(f"https://astroservercheck.joejoetv.de/api/check?url={ip}:{port}", timeout=10)
         json_resp = json.load(resp)
     except:
         LOGGER.warning("Connection to external service failed")
