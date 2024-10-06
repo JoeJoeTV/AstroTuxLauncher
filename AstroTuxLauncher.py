@@ -423,6 +423,8 @@ class AstroTuxLauncher():
                     do_update = True
             except Exception as e:
                 LOGGER.error(f"Error occured while checking for newest version: {str(e)}")
+                LOGGER.warning(f"Trying server update blindly...")
+                do_update = True
 
         if do_update:
             if self.config.AutoUpdateServer:
