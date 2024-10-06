@@ -12,6 +12,24 @@ Launcher and management utility for running an Astroneer Dedicated Server on Lin
 
 ## How to use
 
+### Option 1: Use pre-built executable
+
+1. Create a new folder to house AstroTuxLauncher and the dedicated server.
+2. Download the `AstroTuxLauncher` executable for the latest release from the [releases page](https://github.com/JoeJoeTV/AstroTuxLauncher/releases) and put it into the created folder.
+3. Open a terminal in the created folder and make sure the `AstroTuxLauncher` file is executable.
+4. Install the Astroneer Dedicated Server into default subfolder by executing the following
+    ```sh
+    ./AstroTuxLauncher install
+    ```
+5. [Optional] Change launcher configuration in `launcher.toml` (Can be changed later)
+6. Start the installed Astroneer Dedicated Server for the first time:
+    ```sh
+    ./AstroTuxLauncher start
+    ```
+7. Done! You can stop the server by entering the `shutdown` command or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd>
+
+### Option 2: Use python with the source code
+
 1. Clone the repository
     ```sh
     git clone https://github.com/JoeJoeTV/AstroTuxLauncher
@@ -24,11 +42,11 @@ Launcher and management utility for running an Astroneer Dedicated Server on Lin
     ```sh
     pip install -r requirements.txt
     ```
-4. [Optional] Change launcher configuration in `launcher.toml` (Can be changed later)
-5. Install Astroneer Dedicated Server into default directory
+4. Install Astroneer Dedicated Server into default directory
     ```sh
     python3 AstroTuxLauncher.py install
     ```
+5. [Optional] Change launcher configuration in `launcher.toml` (Can be changed later)
 6. Start installed Astroneer Dedicated Server
     ```sh
     python3 AstroTuxLauncher.py start
