@@ -1303,7 +1303,8 @@ class AstroDedicatedServer:
             conns = psutil.net_connections("inet")
             matching = [c for c in conns 
                         if c.type == (socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM)
-                        and c.laddr[1] == port]
+                        and c.laddr[1] == port
+                        and c.status != 'TIME_WAIT']
             
             return len(matching) > 0
         
