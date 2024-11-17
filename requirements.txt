@@ -4,7 +4,7 @@ colorlog
 dataclasses_json
 IPy
 packaging
-pansi
+pansi==2020.7.3
 pathvalidate
 psutil
 Requests
