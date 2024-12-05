@@ -326,24 +326,24 @@ class AstroTuxLauncher():
         
         LOGGER.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.config.WinePrefixPath}'...")
         
-    try:
-        wineprocess = subprocess.Popen(
-            cmd,
-            env=env,
-            cwd=self.config.AstroServerPath,
-            stderr=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            close_fds=True
-        )
-        code = wineprocess.wait(timeout=timeout)  # Use timeout defined from the config value
-    except subprocess.TimeoutExpired:
-        LOGGER.debug(f"Wine process took longer than {timeout} seconds, aborting")
-        return False
-    except Exception as e:
-        LOGGER.error(f"Error occurred during updating of wine prefix: {str(e)}")
-        return False
-    
-    return code == 0  
+        try:
+            wineprocess = subprocess.Popen(
+                cmd,
+                env=env,
+                cwd=self.config.AstroServerPath,
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                close_fds=True
+            )
+            code = wineprocess.wait(timeout=timeout)  # Use timeout defined from the config value
+        except subprocess.TimeoutExpired:
+            LOGGER.debug(f"Wine process took longer than {timeout} seconds, aborting")
+            return False
+        except Exception as e:
+            LOGGER.error(f"Error occurred during updating of wine prefix: {str(e)}")
+            return False
+        
+        return code == 0
     
     def check_network_config(self):
         if not self.dedicatedserver:
