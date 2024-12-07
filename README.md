@@ -95,6 +95,10 @@ OverrideWinePath = # Not set by default
 # used for running the server should reside
 WinePrefixPath = "winepfx"
 
+# The time (in seconds) that Wine will wait before closing out during Prefix check and creation
+# Default value: 30
+WineBootTimeout = 30
+
 # (Path as String) Relative or absolute path to the directory where the log files should reside
 LogPath = "logs"
 
