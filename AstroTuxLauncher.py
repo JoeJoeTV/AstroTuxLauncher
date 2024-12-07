@@ -129,6 +129,7 @@ class LauncherConfig:
     AstroServerPath: str = "AstroneerServer"    # The path, where the Astroneer DS installation should reside
     OverrideWinePath: Optional[str] = field(metadata=config(exclude=ExcludeIfNone), default=None)   # Path to wine executable, only used, if set
     WinePrefixPath: str = "winepfx"             # The path, where the Wine prefix should be stored
+    WineBootTimeout: int = 30                   # The time (in seconds) that Wine will wait when running *Wineboot* before it times out
     LogPath: str = "logs"                       # The path where logs should be saved
     
     PlayfabAPIInterval: int = 2                 # Time to wait between Playfab API requests
@@ -312,7 +313,7 @@ class AstroTuxLauncher():
         """
         
         LOGGER.debug("Ensuring WINE prefix is setup...")
-        
+        timeout = self.config.WineBootTimeout
         cmd = [self.wineexec, "wineboot"]
         env = os.environ.copy()
         
@@ -326,16 +327,23 @@ class AstroTuxLauncher():
         LOGGER.debug(f"Executing command '{' '.join(cmd)}' in WINE prefix '{self.config.WinePrefixPath}'...")
         
         try:
-            wineprocess = subprocess.Popen(cmd, env=env, cwd=self.config.AstroServerPath, stderr=subprocess.PIPE, stdout=subprocess.PIPE, close_fds=True)
-            code = wineprocess.wait(timeout=30)
-        except TimeoutError:
-            LOGGER.debug("Wine process took longer than 30 seconds, aborting")
+            wineprocess = subprocess.Popen(
+                cmd,
+                env=env,
+                cwd=self.config.AstroServerPath,
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                close_fds=True
+            )
+            code = wineprocess.wait(timeout=timeout)  # Use timeout defined from the config value
+        except subprocess.TimeoutExpired:
+            LOGGER.debug(f"Wine process took longer than {timeout} seconds, aborting")
             return False
         except Exception as e:
-            LOGGER.error(f"Error occured during updating of wine prefix: {str(e)}")
+            LOGGER.error(f"Error occurred during updating of wine prefix: {str(e)}")
             return False
         
-        return code == 0    
+        return code == 0
     
     def check_network_config(self):
         if not self.dedicatedserver:
