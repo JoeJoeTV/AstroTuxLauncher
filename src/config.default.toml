@@ -9,6 +9,7 @@ log_level = "Debug"
 # Options related to the Astroneer dedicated server
 [server]
 ds_path = "AstroneerServer/"
+public_ip = "0.0.0.0"
 
 # Options related to notifications
 [notifications]

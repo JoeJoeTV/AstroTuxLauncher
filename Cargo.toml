@@ -26,3 +26,5 @@ ini-roundtrip = "0.2.0"
 figment = { version = "0.10.19", features = ["env", "json", "toml", "yaml"] }
 jiff = "0.1.16"
 flate2 = "1.0.35"
+better-debug = "1.0.1"
+ipnet = { version = "2.10.1", features = ["serde"] }

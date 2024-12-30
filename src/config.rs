@@ -1,9 +1,14 @@
-use std::path::PathBuf;
+use std::{net::Ipv4Addr, path::PathBuf};
 
 use clap::{Parser, Args, Subcommand};
 use figment::{providers::{Env, Format, Serialized, Toml}, Figment};
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
+use better_debug::BetterDebug;
+
+fn hide_ipv4_partially(server_cfg: &ServerConfiguration) -> Option<String> {
+    Some(format!("{}.<redacted>", server_cfg.public_ip.to_owned().octets()[0]))
+}
 
 /*
  * CLI Configuration
@@ -111,10 +116,12 @@ pub struct ManagerConfiguration {
     pub log_level: LevelFilter,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(BetterDebug, Serialize, Deserialize)]
 /// Configuration for the dedicated server
 pub struct ServerConfiguration {
     pub ds_path: PathBuf,
+    #[better_debug(cust_formatter = "hide_ipv4_partially")]
+    pub public_ip: Ipv4Addr,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
