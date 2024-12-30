@@ -1,0 +1,28 @@
+[package]
+name = "astro-server-manager"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Parsing
+clap = { version = "4.5.20", features = ["derive"] }
+shlex = "1.3.0"
+serde = { version = "1.0.217", features = ["derive"] }
+
+# Logging
+indicatif = "0.17.8"
+indicatif-log-bridge = "0.2.3"
+log = { version = "0.4.22", features = ["serde", "kv"] }
+fern = { version = "0.7.1", features = ["colored"] }
+logcall = "0.1"
+log_err = "1.1.1"
+logs-wheel = "0.3.1"
+
+# Other
+netstat2 = "0.11"
+toml_edit = { version = "0.22.22", features = ["serde"] }
+wincompatlib = "0.7.5"
+ini-roundtrip = "0.2.0"
+figment = { version = "0.10.19", features = ["env", "json", "toml", "yaml"] }
+jiff = "0.1.16"
+flate2 = "1.0.35"
