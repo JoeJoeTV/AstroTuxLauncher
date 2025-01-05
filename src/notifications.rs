@@ -5,7 +5,7 @@ use flume::{Receiver, Sender};
 use hex_color::HexColor;
 use jiff::Timestamp;
 use log::{
-    info, Level, LevelFilter
+    debug, info, Level, LevelFilter
 };
 use async_utility::blocking::Async2Blocking;
 use ntfy::prelude::*;
@@ -151,7 +151,7 @@ impl NtfyNotificationThread {
     }
 
     fn run(self) {
-        info!(from_notify=true; "Starting ntfy notification thread...");
+        debug!(from_notify=true; "Starting ntfy notification thread...");
 
         loop {
             match self.channel.1.recv() {
@@ -274,7 +274,7 @@ impl DiscordNotificationThread {
     }
 
     fn run(self) {
-        info!(from_notify=true; "Starting ntfy notification thread...");
+        debug!(from_notify=true; "Starting discord notification thread...");
 
         loop {
             match self.channel.1.recv() {
