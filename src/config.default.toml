@@ -13,4 +13,44 @@ public_ip = "0.0.0.0"
 
 # Options related to notifications
 [notifications]
-type = "None"
+type = "none"
+name = "Astroneer Dedicated Server"
+level = "server"
+server_url = "https://ntfy.sh"
+
+# Emojis to display for an event in NTFY
+# See https://docs.ntfy.sh/emojis/ for name reference
+[notifications.emojis]
+start = "green_square"
+registered = "white_check_mark"
+shutdown = "orange_square"
+crash = "red_square"
+player_join = "inbox_tray"
+player_leave = "outbox_tray"
+command = "wrench"
+save = "file_cabinet"
+savegame_change = "card_index_dividers"
+
+# Priorities to assign to events in NTFY
+[notifications.priorities]
+start = "default"
+registered = "low"
+shutdown = "default"
+crash = "high"
+player_join = "low"
+player_leave = "low"
+command = "default"
+save = "low"
+savegame_change = "default"
+
+# Colors to assign to events in Discord
+[notifications.colors]
+start = "#00ff00"
+registered = "#ffff00"
+shutdown = "#ffff00"
+crash = "#ff0000"
+player_join = "#0000ff"
+player_leave = "#0000ff"
+command = "#777777"
+save = "#0000ff"
+savegame_change = "#0000ff"

@@ -1,10 +1,17 @@
-use std::{net::Ipv4Addr, path::PathBuf};
+use std::{collections::HashMap, net::Ipv4Addr, path::PathBuf};
 
 use clap::{Parser, Args, Subcommand};
 use figment::{providers::{Env, Format, Serialized, Toml}, Figment};
+use hex_color::HexColor;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use better_debug::BetterDebug;
+use url::Url;
+use crate::notifications::{NotificationLevel, NtfyPriority};
+
+/*
+ * Helper functions and types
+ */
 
 fn hide_ipv4_partially(server_cfg: &ServerConfiguration) -> Option<String> {
     Some(format!("{}.<redacted>", server_cfg.public_ip.to_owned().octets()[0]))
@@ -81,10 +88,11 @@ pub struct CliServerConfiguration {
  * NOTE: (basically) same as CliConfiguration and related structs, but without Option and clap-related annotations
  */
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(BetterDebug, Serialize, Deserialize)]
 pub struct Configuration {
     pub manager: ManagerConfiguration,
     pub server: ServerConfiguration,
+    //#[better_debug(secret)]
     pub notifications: NotificationConfiguration,
 }
 
@@ -124,9 +132,39 @@ pub struct ServerConfiguration {
     pub public_ip: Ipv4Addr,
 }
 
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
-/// Configuration for the notifications
+#[serde(rename_all(serialize = "lowercase", deserialize = "lowercase"))]
+/// Configuration for notifications
 pub enum NotificationConfiguration {
+    /// Specifies that no notifications should be sent
     None,
+    /// Specifies to send notifications to an ntfy topic  
+    Ntfy {
+        name: String,
+        level: NotificationLevel,
+        emojis: HashMap<String, String>,
+        topic: String,
+        server_url: Url,
+        priorities: HashMap<String, NtfyPriority>,
+    },
+    /// Specifies to send notifications to a discord webhook
+    Discord {
+        name: String,
+        level: NotificationLevel,
+        emojis: HashMap<String, String>,
+        colors: HashMap<String, HexColor>,
+        webhook_url: Url,
+    },
+}
+
+impl NotificationConfiguration {
+    pub fn get_level(&self) -> NotificationLevel {
+        match self {
+            Self::None => NotificationLevel::Server,
+            Self::Ntfy { level, ..} => *level,
+            Self::Discord { level, .. } => *level,
+        }
+    }
 }

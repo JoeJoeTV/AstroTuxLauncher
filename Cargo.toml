@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # Parsing
-clap = { version = "4.5.20", features = ["derive"] }
+clap = { version = "4.5.20", features = ["derive", "cargo"] }
 shlex = "1.3.0"
 serde = { version = "1.0.217", features = ["derive"] }
 
@@ -24,7 +24,17 @@ toml_edit = { version = "0.22.22", features = ["serde"] }
 wincompatlib = "0.7.5"
 ini-roundtrip = "0.2.0"
 figment = { version = "0.10.19", features = ["env", "json", "toml", "yaml"] }
-jiff = "0.1.16"
+jiff = { version = "0.1.16", features = ["serde"] }
 flate2 = "1.0.35"
 better-debug = "1.0.1"
 ipnet = { version = "2.10.1", features = ["serde"] }
+url = { version = "2.5.4", features = ["serde"] }
+flume = "0.11.1"
+webhook = { version = "2.1.2", features = ["models"], default-features = false }
+async-utility = { git = "https://github.com/yukibtc/async-utility", rev = "575b6fb0b4e270ae44208d4b7c234366d33e32f6" }
+ntfy = "0.6"
+ureq = { version = "2.12.1", features = ["json"] }
+hex_color = { version = "3.0.0", features = ["serde"] }
+serde_nested_with = "0.2.5"
+thiserror = "2.0.9"
+url-macro = "0.1.9"
