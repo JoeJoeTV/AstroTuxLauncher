@@ -185,9 +185,9 @@ pub fn setup_logging(log_level: &LevelFilter, log_directory: &Path,
                 let kv = record.key_values();
     
                 // If the log message is from a notification provides, we don't wan't to send it there again
-                if let Some(v) = kv.get("from_notify".into()) {
-                    let from_notify = v.to_bool().unwrap();
-                    if from_notify {
+                if let Some(v) = kv.get("skip_notify".into()) {
+                    let skip_notify = v.to_bool().unwrap();
+                    if skip_notify {
                         return;
                     }
                 }

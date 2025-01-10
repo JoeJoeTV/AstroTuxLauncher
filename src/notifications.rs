@@ -17,7 +17,7 @@ use crate::discord::WebhookMessage;
 
 macro_rules! notifyerror {
     (target: $target:expr, $($arg:tt)+) => (log::log!(target: $target, log::Level::Error, from_notify=true; $($arg)+));
-    ($($arg:tt)+) => (log::log!(log::Level::Error, from_notify=true; $($arg)+))
+    ($($arg:tt)+) => (log::log!(log::Level::Error, skip_notify=true; $($arg)+))
 }
 
 const NOTIFY_APP_NAME: &str = "AstroServerManager";

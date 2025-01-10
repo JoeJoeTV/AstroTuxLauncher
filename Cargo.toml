@@ -38,3 +38,4 @@ hex_color = { version = "3.0.0", features = ["serde"] }
 serde_nested_with = "0.2.5"
 thiserror = "2.0.9"
 url-macro = "0.1.9"
+ctrlc = "3.4.5"

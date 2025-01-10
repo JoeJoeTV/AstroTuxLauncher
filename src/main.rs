@@ -4,11 +4,11 @@ mod notifications;
 #[allow(dead_code)]
 mod discord;
 
-use std::{env, thread::sleep, time::Duration};
+use std::{env, thread::{sleep, JoinHandle}, time::Duration};
 
-use config::{Cli, Configuration};
-use clap::Parser;
-use log::{self, info};
+use config::{Cli, Configuration, NotificationConfiguration};
+use clap::{crate_version, Parser};
+use log::{self, debug, info};
 use logging::setup_logging;
 use notifications::{DiscordNotificationThread, NtfyNotificationThread};
 
@@ -24,12 +24,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Configuration: {:#?}", config);
 
-    let notification_thread = match &config.notifications {
-        config::NotificationConfiguration::None => None,
-        config::NotificationConfiguration::Ntfy {name: _, level: _, emojis, topic, server_url, priorities } => 
-            Some(NtfyNotificationThread::new(server_url.clone(), topic.clone(), emojis.clone(), priorities.clone())?),
-        config::NotificationConfiguration::Discord { name: _, level: _, emojis, webhook_url, colors } => 
-            Some(DiscordNotificationThread::new(webhook_url.clone(), emojis.clone(), colors.clone())),
+    // Create notification channel, if applicable
+    let (notification_sender, notification_thread) = match &config.notifications {
+        NotificationConfiguration::None => (None, None),
+        NotificationConfiguration::Ntfy { name: _, level: _, emojis, topic, server_url, priorities } => {
+            let t = NtfyNotificationThread::new(server_url.clone(), topic.clone(), emojis.clone(), priorities.clone())?;
+            (Some(t.get_sender()), Some(t))
+        },
+        NotificationConfiguration::Discord { name: _, level: _, emojis, colors, webhook_url } => {
+            let t = DiscordNotificationThread::new(webhook_url.clone(), emojis.clone(), colors.clone());
+            (Some(t.get_sender()), Some(t))
+        },
     };
     
     // Setup logging to console and file
@@ -37,16 +42,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &config.manager.log_level,
         &config.manager.log_path,
         config.notifications.get_level(),
-        notification_thread.as_ref().map(|t|t.as_ref().get_sender())
+        notification_sender.clone()
     )?;
 
-    if let Some(notification_thread) = notification_thread {
-        notification_thread.start();
+    let (signal_sender, signal_receiver) = flume::unbounded();
+
+    ctrlc::set_handler(move || {
+        signal_sender.send(()).unwrap()
+    }).unwrap();
+
+    info!(skip_notify=true; "AstroServerManager v{}", crate_version!());
+
+    debug!(skip_notify=true; "Configuration: {:#?}", config);
+
+    // Start notification thread
+    let notification_handle = match notification_thread {
+        Some(notification_thread) => Some(notification_thread.start()),
+        None => None,
+    };
+
+
+    // Before exiting, stop notification thread
+    if let (Some(notification_handle),Some(notification_sender)) = (notification_handle,notification_sender) {
+        notification_sender.send(notifications::NotificationThreadMessage::Stop).unwrap();
+        notification_handle.join().unwrap();
     }
-
-    info!(env!("CARGO_PKG_VERSION"));
-
-    sleep(Duration::from_secs(4));
 
     Ok(())
 }
