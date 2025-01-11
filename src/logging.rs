@@ -125,7 +125,7 @@ pub fn roll_logfile(base_filename: &str, log_directory: &Path) -> io::Result<Pat
     Ok(logfile_path.clone())
 }
 
-pub fn setup_logging(log_level: &LevelFilter, log_directory: &Path, 
+pub fn setup_logging(log_level: &LevelFilter, log_directory: &Path, log_file_level: &LevelFilter,
         notification_level: NotificationLevel, notification_sender: Option<Sender<NotificationThreadMessage>>) -> Result<(), fern::InitError> {
     let base_config = fern::Dispatch::new();
 
@@ -133,32 +133,36 @@ pub fn setup_logging(log_level: &LevelFilter, log_directory: &Path,
         .error(Color::Red)
         .warn(Color::Yellow)
         .info(Color::White)
-        .debug(Color::White)
+        .debug(Color::BrightBlack)
         .trace(Color::BrightBlack);
 
     let file_config = fern::Dispatch::new()
         .format(|out, message, record| {
-            // [12:12:12] [target/info] message
+            // [01.01.01/12:12:12] [target/info] message
             out.finish(format_args!(
-                "[{}] [{}/{}] {}",
-                Zoned::now().strftime("%d.%m.%y/%H:%M:%S"),
-                record.target(),
-                record.level(),
-                message
+                "[{datetime}] [{target}/{level}] {message}",
+                datetime = Zoned::now().strftime("%d.%m.%y/%H:%M:%S"),
+                target = record.target(),
+                level = record.level(),
+                message = message,
             ));
         })
-        .level(LevelFilter::Debug)
+        .level(log_file_level.clone())
         .chain(fern::log_file(roll_logfile("asm.log", log_directory)?)?);
     
     let console_config = fern::Dispatch::new()
         .format(move |out, message, record| {
             // [12:12:12] [target/info] message
             out.finish(format_args!(
-                "[{}] [{}/{}] {}",
-                Zoned::now().strftime("%H:%M:%S"),
-                record.target(),
-                colors_line.color(record.level()),
-                message
+                "[{time}] {line_color}[{target}/{level}] {message}\x1B[0m",
+                line_color = format_args!(
+                    "\x1B[{}m",
+                    colors_line.get_color(&record.level()).to_fg_str()
+                ),
+                time = Zoned::now().strftime("%H:%M:%S"),
+                target = record.target(),
+                level = record.level(),
+                message = message,
             ));
         })
         .level(log_level.clone())

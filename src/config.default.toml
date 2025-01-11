@@ -1,10 +1,11 @@
 # This is the default configuration file for AstroServerManager
 # To change these values, copy this file, rename it to `config.toml` and perform the changes
 
-# Options related to the manager itsel
+# Options related to the manager itself
 [manager]
 log_path = "logs/"
-log_level = "Debug"
+log_level = "Info"
+log_file_level = "Debug"
 
 # Options related to the Astroneer dedicated server
 [server]

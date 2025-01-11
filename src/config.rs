@@ -122,6 +122,7 @@ impl Configuration {
 pub struct ManagerConfiguration {
     pub log_path: PathBuf,
     pub log_level: LevelFilter,
+    pub log_file_level: LevelFilter,
 }
 
 #[derive(BetterDebug, Serialize, Deserialize)]

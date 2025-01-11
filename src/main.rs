@@ -41,6 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_logging(
         &config.manager.log_level,
         &config.manager.log_path,
+        &config.manager.log_file_level,
         config.notifications.get_level(),
         notification_sender.clone()
     )?;
