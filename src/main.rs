@@ -1,8 +1,6 @@
 mod config;
 mod logging;
 mod notifications;
-#[allow(dead_code)]
-mod discord;
 
 use std::{env, thread::{sleep, JoinHandle}, time::Duration};
 

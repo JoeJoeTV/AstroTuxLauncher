@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 use ureq::Agent;
 use url::Url;
 
-use crate::discord::WebhookMessage;
+#[allow(dead_code)]
+mod discord;
+
+use discord::WebhookMessage;
 
 macro_rules! notifyerror {
     (target: $target:expr, $($arg:tt)+) => (log::log!(target: $target, log::Level::Error, from_notify=true; $($arg)+));
