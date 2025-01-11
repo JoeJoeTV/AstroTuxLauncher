@@ -32,6 +32,9 @@ pub struct Cli {
     pub command: CliCommands,
 }
 
+// TODO: For later server commands: use command(flatten) on enum variant to delegate different commands (shutdown vs disconnect)
+
+// TODO: Maybe use clap::Arg::global to set configuration args regardless of subcommand
 #[derive(Subcommand, Debug)]
 pub enum CliCommands {
     /// Install/Update the dedicated server without explicitly checking, if a newer version exixts 
@@ -40,6 +43,9 @@ pub enum CliCommands {
     /// Start the dedicated server
     #[command(name = "run")]
     Run(CliConfiguration),
+    /// Connect to a running dedicated server via the console port
+    #[command(name = "connect")]
+    Connect(ConnectArgs),
 }
 
 impl CliCommands {
@@ -47,8 +53,20 @@ impl CliCommands {
         match self {
             Self::Run(cli_cfg) => cli_cfg,
             Self::Update(cli_cfg) => cli_cfg,
+            Self::Connect(cli_cfg) => &cli_cfg.configuration,
         }
     }
+}
+
+#[derive(Args, Debug, Serialize, Deserialize)]
+pub struct ConnectArgs {
+    #[command(flatten)]
+    pub configuration: CliConfiguration,
+
+    /// The IPv4 address of the host running the dedicated server to connect to
+    pub host: Ipv4Addr,
+    /// The console port of the dedicated server to connect to
+    pub port: u16,
 }
 
 // NOTE: When updating the normal configuration, the cli configuration also has to be changed and vice versa 
