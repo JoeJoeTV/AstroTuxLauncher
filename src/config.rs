@@ -26,43 +26,30 @@ fn hide_ipv4_partially(server_cfg: &ServerConfiguration) -> Option<String> {
 #[command(version, about = "A server manager for the Astroneer Dedicated Server", long_about = None)]
 pub struct Cli {
     /// Path to the AstroServerManager configuration file
-    #[arg(long = "config_path", short = 'c', default_value = "config.toml")]
+    #[arg(long = "config_path", short = 'c', default_value = "config.toml", global = true)]
     pub config_path: PathBuf,
     #[command(subcommand)]
     pub command: CliCommands,
+    #[command(flatten, next_help_heading = "Configuration Options")]
+    pub configuration: CliConfiguration
 }
 
 // TODO: For later server commands: use command(flatten) on enum variant to delegate different commands (shutdown vs disconnect)
-
-// TODO: Maybe use clap::Arg::global to set configuration args regardless of subcommand
 #[derive(Subcommand, Debug)]
 pub enum CliCommands {
     /// Install/Update the dedicated server without explicitly checking, if a newer version exixts 
     #[command(visible_alias = "install",name = "update")]
-    Update(CliConfiguration),
+    Update,
     /// Start the dedicated server
     #[command(name = "run")]
-    Run(CliConfiguration),
+    Run,
     /// Connect to a running dedicated server via the console port
     #[command(name = "connect")]
     Connect(ConnectArgs),
 }
 
-impl CliCommands {
-    pub fn config(&self) -> &CliConfiguration {
-        match self {
-            Self::Run(cli_cfg) => cli_cfg,
-            Self::Update(cli_cfg) => cli_cfg,
-            Self::Connect(cli_cfg) => &cli_cfg.configuration,
-        }
-    }
-}
-
 #[derive(Args, Debug, Serialize, Deserialize)]
 pub struct ConnectArgs {
-    #[command(flatten)]
-    pub configuration: CliConfiguration,
-
     /// The IPv4 address of the host running the dedicated server to connect to
     pub host: Ipv4Addr,
     /// The console port of the dedicated server to connect to
@@ -84,11 +71,11 @@ pub struct CliConfiguration {
 
 #[derive(Args, Debug, Serialize, Deserialize)]
 pub struct CliManagerConfiguration {
-    #[arg(long)]
+    #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log_path: Option<PathBuf>,
 
-    #[arg(long)]
+    #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log_level: Option<LevelFilter>,
 }
@@ -96,7 +83,7 @@ pub struct CliManagerConfiguration {
 #[derive(Args, Debug, Serialize, Deserialize)]
 /// Configuration for the dedicated server
 pub struct CliServerConfiguration {
-    #[arg(long)]
+    #[arg(long, global = true)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ds_path: Option<PathBuf>,
 }
@@ -118,7 +105,7 @@ impl Configuration {
     pub fn figment(config_path: &PathBuf, cli: &Cli) -> Figment {
         let default_config: &str = include_str!("config.default.toml");
         const ENV_PREFIX: &str = "ASM_";
-        let cli_config = cli.command.config();
+        let cli_config = &cli.configuration;
         
         if config_path.exists() && config_path.is_file() {
             Figment::new()
