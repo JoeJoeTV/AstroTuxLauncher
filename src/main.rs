@@ -1,6 +1,8 @@
 mod config;
 mod logging;
 mod notifications;
+mod repl;
+mod dedicatedserver;
 
 use std::{env, thread::{sleep, JoinHandle}, time::Duration};
 
@@ -11,16 +13,15 @@ use logging::setup_logging;
 use notifications::{DiscordNotificationThread, NtfyNotificationThread};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Hello, world!");
-    println!("Exe dir: {:?}", env::current_exe().unwrap().parent().unwrap().canonicalize().unwrap().display());
+    /*
+     * Setup 
+     */
 
     // Parse CLI arguments
     let cli = Cli::parse();
     
     // Load configuration
     let config: Configuration = Configuration::figment(&cli.config_path, &cli).extract()?;
-
-    println!("Configuration: {:#?}", config);
 
     // Create notification channel, if applicable
     let (notification_sender, notification_thread) = match &config.notifications {
@@ -44,15 +45,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         notification_sender.clone()
     )?;
 
-    let (signal_sender, signal_receiver) = flume::unbounded();
+    // Register signal handler
+    let (signal_sender, _signal_receiver) = flume::unbounded();
 
     ctrlc::set_handler(move || {
         signal_sender.send(()).unwrap()
     }).unwrap();
-
-    info!(skip_notify=true; "AstroServerManager v{}", crate_version!());
-
-    debug!(skip_notify=true; "Configuration: {:#?}", config);
 
     // Start notification thread
     let notification_handle = match notification_thread {
@@ -60,6 +58,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => None,
     };
 
+    /*
+     * Start manager
+     */
+
+    info!(skip_notify=true; "AstroServerManager v{}", crate_version!());
+    debug!(skip_notify=true; "Exe dir: {:?}", env::current_exe().unwrap().parent().unwrap().canonicalize().unwrap().display());
+
+    debug!(skip_notify=true; "Configuration: {:#?}", config);
+
+    /*
+     * Stop manager
+     */
 
     // Before exiting, stop notification thread
     if let (Some(notification_handle),Some(notification_sender)) = (notification_handle,notification_sender) {

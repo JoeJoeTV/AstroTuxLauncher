@@ -34,7 +34,6 @@ pub struct Cli {
     pub configuration: CliConfiguration
 }
 
-// TODO: For later server commands: use command(flatten) on enum variant to delegate different commands (shutdown vs disconnect)
 #[derive(Subcommand, Debug)]
 pub enum CliCommands {
     /// Install/Update the dedicated server without explicitly checking, if a newer version exixts 
