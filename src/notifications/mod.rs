@@ -7,8 +7,8 @@ use jiff::Timestamp;
 use log::{
     debug, info, Level, LevelFilter
 };
-use async_utility::blocking::Async2Blocking;
 use ntfy::prelude::*;
+use ntfy::error::Error as NtfyError;
 use serde::{Deserialize, Serialize};
 use ureq::Agent;
 use url::Url;
@@ -88,45 +88,11 @@ pub trait NotificationThread {
     fn start(self: Box<Self>) -> JoinHandle<()>;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-#[serde(rename_all(serialize = "lowercase", deserialize = "lowercase"))]
-pub enum NtfyPriority {
-    Max,
-    High,
-    Default,
-    Low,
-    Min,
-}
-
-impl From<Priority> for NtfyPriority {
-    fn from(value: Priority) -> Self {
-        match value {
-            Priority::Max => Self::Max,
-            Priority::High => Self::High,
-            Priority::Default => Self::Default,
-            Priority::Low => Self::Low,
-            Priority::Min => Self::Min,
-        }
-    }
-}
-
-impl Into<Priority> for NtfyPriority {
-    fn into(self) -> Priority {
-        match self {
-            Self::Max => Priority::Max,
-            Self::High => Priority::High,
-            Self::Default => Priority::Default,
-            Self::Low => Priority::Low,
-            Self::Min => Priority::Min,
-        }
-    }
-}
-
 pub struct NtfyNotificationThread {
     topic: String,
     emojis: HashMap<String, String>,
-    priorities: HashMap<String, NtfyPriority>,
-    dispatcher: Dispatcher,
+    priorities: HashMap<String, Priority>,
+    dispatcher: Dispatcher<Blocking>,
     channel: (
         Sender<NotificationThreadMessage>,
         Receiver<NotificationThreadMessage>,
@@ -138,14 +104,16 @@ impl NtfyNotificationThread {
         server_url: Url,
         topic: String,
         emojis: HashMap<String, String>,
-        priorities: HashMap<String, NtfyPriority>,
+        priorities: HashMap<String, Priority>,
     ) -> Result<Box<dyn NotificationThread>, NtfyError> {
         let channel = flume::unbounded();
+        let agent_builder = ureq::builder()
+            .user_agent(&format!("{}/{}", crate_name!(), crate_version!()));
 
         let thread = NtfyNotificationThread {
             topic,
             emojis,
-            dispatcher: Dispatcher::builder(server_url).build()?,
+            dispatcher: dispatcher::builder(server_url).build_blocking_with_client(agent_builder)?,
             channel,
             priorities,
         };
@@ -182,7 +150,7 @@ impl NtfyNotificationThread {
                                 .tags(tags)
                                 .priority(priority);
 
-                                self.dispatcher.send(&payload).blocking().unwrap();
+                                self.dispatcher.send(&payload).unwrap();
                         } else {
                             let title: &str;
                             let priority: Priority;
@@ -222,7 +190,7 @@ impl NtfyNotificationThread {
                                 .tags([NOTIFY_APP_NAME, tag])
                                 .priority(priority);
                             
-                            self.dispatcher.send(&payload).blocking().unwrap();
+                            self.dispatcher.send(&payload).unwrap();
 
                         }
                     }

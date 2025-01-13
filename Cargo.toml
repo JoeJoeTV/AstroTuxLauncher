@@ -31,8 +31,7 @@ ipnet = { version = "2.10.1", features = ["serde"] }
 url = { version = "2.5.4", features = ["serde"] }
 flume = "0.11.1"
 webhook = { version = "2.1.2", features = ["models"], default-features = false }
-async-utility = { git = "https://github.com/yukibtc/async-utility", rev = "575b6fb0b4e270ae44208d4b7c234366d33e32f6" }
-ntfy = "0.6"
+ntfy = { version = "0.7", features = ["blocking"], default-features = false }
 ureq = { version = "2.12.1", features = ["json"] }
 hex_color = { version = "3.0.0", features = ["serde"] }
 serde_nested_with = "0.2.5"

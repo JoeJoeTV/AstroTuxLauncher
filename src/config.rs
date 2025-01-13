@@ -4,10 +4,11 @@ use clap::{Parser, Args, Subcommand};
 use figment::{providers::{Env, Format, Serialized, Toml}, Figment};
 use hex_color::HexColor;
 use log::LevelFilter;
+use ntfy::Priority;
 use serde::{Deserialize, Serialize};
 use better_debug::BetterDebug;
 use url::Url;
-use crate::notifications::{NotificationLevel, NtfyPriority};
+use crate::notifications::NotificationLevel;
 
 /*
  * Helper functions and types
@@ -152,7 +153,7 @@ pub enum NotificationConfiguration {
         emojis: HashMap<String, String>,
         topic: String,
         server_url: Url,
-        priorities: HashMap<String, NtfyPriority>,
+        priorities: HashMap<String, Priority>,
     },
     /// Specifies to send notifications to a discord webhook
     Discord {
