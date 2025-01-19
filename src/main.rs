@@ -4,7 +4,7 @@ mod notifications;
 mod repl;
 mod dedicatedserver;
 
-use std::{env, thread::{sleep, JoinHandle}, time::Duration};
+use std::{env, process::exit, thread::{sleep, JoinHandle}, time::Duration};
 
 use config::{Cli, Configuration, NotificationConfiguration};
 use clap::{crate_version, Parser};
@@ -21,7 +21,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     
     // Load configuration
-    let config: Configuration = Configuration::figment(&cli.config_path, &cli).extract()?;
+    let config: Configuration = match Configuration::figment(&cli.config_path, &cli).extract() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Configuration Error: {}", e);
+            exit(1);
+        },
+    };
 
     // Create notification channel, if applicable
     let (notification_sender, notification_thread) = match &config.notifications {
