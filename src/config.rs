@@ -1,3 +1,7 @@
+/// File: config.rs
+/// Author: JoeJoeTV
+/// Description: Contains structures represnting the configuration and cli interface of the application
+
 use std::{collections::HashMap, net::Ipv4Addr, path::PathBuf};
 
 use clap::{Parser, Args, Subcommand};
@@ -22,6 +26,7 @@ fn hide_ipv4_partially(server_cfg: &ServerConfiguration) -> Option<String> {
  * CLI Configuration
  */
 
+/// The struct representing the cli interface of the application
 #[derive(Parser, Debug)]
 #[command(name = "AstroServerManager")]
 #[command(version, about = "A server manager for the Astroneer Dedicated Server", long_about = None)]

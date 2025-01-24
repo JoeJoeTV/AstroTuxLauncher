@@ -1,3 +1,8 @@
+/// Module: notifications
+/// File: mod.rs
+/// Author: JoeJoeTV
+/// Description: Contains functionality for sending notifications to services like ntfy or discord
+
 use std::{collections::HashMap, thread::JoinHandle};
 
 use clap::{crate_name, crate_version};

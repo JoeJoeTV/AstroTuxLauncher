@@ -12,7 +12,7 @@ use log::{self, debug, info};
 use logging::setup_logging;
 use notifications::{DiscordNotificationThread, NtfyNotificationThread};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()> {
     /*
      * Setup 
      */

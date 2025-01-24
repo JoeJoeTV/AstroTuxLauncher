@@ -1,3 +1,8 @@
+/// Module: logging
+/// File: rolling.rs
+/// Author: JoeJoeTV
+/// Description: Contains functionality to roll and compress existing log files and get the file nmame of a new one
+
 use std::{
     fs::{create_dir_all, remove_file, OpenOptions}, io::{self, BufRead, BufReader, Write}, path::{Path, PathBuf, MAIN_SEPARATOR}
 };

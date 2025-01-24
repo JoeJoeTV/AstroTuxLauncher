@@ -1,3 +1,8 @@
+/// Module: notifications
+/// File: discord.rs
+/// Author: JoeJoeTV
+/// Description: Contains models for use with Discord's Webhooks
+
 use thiserror::Error;
 
 use hex_color::HexColor;

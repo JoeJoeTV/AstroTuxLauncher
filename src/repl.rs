@@ -1,3 +1,7 @@
+/// File: repl.rs
+/// Author: JoeJoeTV
+/// Description: Contains the REPL interface for the server commands
+
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use log::debug;
 use serde::{Deserialize, Serialize};

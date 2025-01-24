@@ -2,6 +2,8 @@
 name = "astro-server-manager"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-only"
+
 
 [dependencies]
 # Parsing
@@ -37,3 +39,4 @@ serde_nested_with = "0.2.5"
 thiserror = "2.0.9"
 url-macro = "0.1.9"
 ctrlc = "3.4.5"
+anyhow = "1.0.95"

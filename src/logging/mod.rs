@@ -1,5 +1,11 @@
+/// Module: logging
+/// File: mod.rs
+/// Author: JoeJoeTV
+/// Description: Contains functionality to set up and configure logging using fern
+
 mod rolling;
 
+use anyhow::Context;
 use fern::colors::{Color, ColoredLevelConfig};
 use flume::Sender;
 use jiff::Zoned;
@@ -12,7 +18,7 @@ use crate::notifications::{NotificationLevel, NotificationThreadMessage};
 pub const SERVER_EVENT_TARGET: &str = "event";
 
 pub fn setup_logging(log_level: &LevelFilter, log_directory: &Path, log_file_level: &LevelFilter,
-        notification_level: NotificationLevel, notification_sender: Option<Sender<NotificationThreadMessage>>) -> Result<(), fern::InitError> {
+        notification_level: NotificationLevel, notification_sender: Option<Sender<NotificationThreadMessage>>) -> anyhow::Result<()> {
     let base_config = fern::Dispatch::new();
 
     let colors_line = ColoredLevelConfig::new()
@@ -34,7 +40,11 @@ pub fn setup_logging(log_level: &LevelFilter, log_directory: &Path, log_file_lev
             ));
         })
         .level(log_file_level.clone())
-        .chain(fern::log_file(rolling::roll_logfile("asm.log", log_directory)?)?);
+        .chain(
+            fern::log_file(
+                rolling::roll_logfile("asm.log", log_directory).context("Could not get log file name")?
+            ).context("Could not open log file")?
+        );
     
     let console_config = fern::Dispatch::new()
         .format(move |out, message, record| {
@@ -94,7 +104,5 @@ pub fn setup_logging(log_level: &LevelFilter, log_directory: &Path, log_file_lev
             log_config = log_config.chain(notification_config);
     }
 
-    log_config.apply()?;
-
-    Ok(())
+    Ok(log_config.apply().context("Could not apply logger")?)
 }
