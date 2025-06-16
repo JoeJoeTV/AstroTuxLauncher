@@ -1,6 +1,7 @@
-use std::{fs::File, io::{self, BufRead}, path::Path};
+use std::{fs::File, io::{self, BufRead}, path::{Path, MAIN_SEPARATOR}};
 
 use anyhow::{anyhow, Context};
+use const_format::concatcp;
 use log::{debug, error};
 use regex::{Captures, Regex};
 
@@ -23,8 +24,9 @@ impl Default for InstallInfo {
     }
 }
 
+
 /// Relative path to the server executable
-pub const DS_EXECUTABLE_PATH: &str = "Astro/Binaries/Win64/AstroServer-Win64-Shipping.exe";
+pub const DS_EXECUTABLE_PATH: &str = concatcp!("Astro",MAIN_SEPARATOR,"Binaries",MAIN_SEPARATOR,"Win64",MAIN_SEPARATOR,"AstroServer-Win64-Shipping.exe");
 /// Relative path to the server wrapper executable
 pub const DS_WRAPPER_PATH: &str = "AstroServer.exe";
 /// Relative path to the build version file
@@ -100,5 +102,28 @@ impl InstallInfo {
                 })
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    const BUILD_VERSION_PATH: &str = concatcp!("resources",MAIN_SEPARATOR,"test",MAIN_SEPARATOR,"server_environment",MAIN_SEPARATOR,"build.version");
+
+    #[test]
+    fn read_basic_build_file() {
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push(BUILD_VERSION_PATH);
+
+        let res = parse_build_version_file(&d);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert_eq!(res.0, 1);
+        assert_eq!(res.1, 33);
+        assert_eq!(res.2, 14);
+        assert_eq!(res.3, 0);
     }
 }
