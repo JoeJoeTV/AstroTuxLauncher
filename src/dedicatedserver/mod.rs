@@ -112,6 +112,7 @@ mod tests {
     use super::*;
 
     const BUILD_VERSION_PATH: &str = concatcp!("resources",MAIN_SEPARATOR,"test",MAIN_SEPARATOR,"server_environment",MAIN_SEPARATOR,"build.version");
+    const SERVER_ENVIRONMENT_PATH: &str = concatcp!("resources",MAIN_SEPARATOR,"test",MAIN_SEPARATOR,"server_environment");
 
     #[test]
     fn read_basic_build_file() {
@@ -125,5 +126,24 @@ mod tests {
         assert_eq!(res.1, 33);
         assert_eq!(res.2, 14);
         assert_eq!(res.3, 0);
+    }
+
+    #[test]
+    fn build_version_comparison() {
+        assert!(BuildVersion(1,2,3,4) < BuildVersion(1,2,3,5));
+        assert!(BuildVersion(1,2,3,4) < BuildVersion(1,2,4,4));
+        assert!(BuildVersion(2,2,3,4) > BuildVersion(1,3,4,5));
+    }
+
+    #[test]
+    fn valid_server_environment() {
+        let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        d.push(SERVER_ENVIRONMENT_PATH);
+
+        let res = InstallInfo::gather(&d);
+        assert!(res.is_ok());
+        let res = res.unwrap();
+        assert_eq!(res.present, true);
+        assert_eq!(res.build_version, Some(BuildVersion(1,33,14,0)));
     }
 }
