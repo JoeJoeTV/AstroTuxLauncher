@@ -884,7 +884,7 @@ class AstroDedicatedServer:
         
         cmd = [self.wine_exec, path.join(self.astro_path, "AstroServer.exe"), "-log"]
 
-        if self.launcher.config.WrapperPath is not None and self.launcher.config.WrapperPath is not "":
+        if self.launcher.config.WrapperPath:
             cmd.insert(0, self.launcher.config.WrapperPath)
 
         env = os.environ.copy()
@@ -908,7 +908,7 @@ class AstroDedicatedServer:
         
         cmd = [self.wineserver_exec, "-k", "-w"]
 
-        if self.launcher.config.WrapperPath is not None and self.launcher.config.WrapperPath is not "":
+        if self.launcher.config.WrapperPath:
             cmd.insert(0, self.launcher.config.WrapperPath)
 
         env = os.environ.copy()

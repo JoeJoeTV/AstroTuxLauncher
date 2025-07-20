@@ -318,7 +318,7 @@ class AstroTuxLauncher():
         timeout = self.config.WineBootTimeout
         cmd = [self.wineexec, "wineboot"]
 
-        if self.config.WrapperPath is not None and self.config.WrapperPath is not "":
+        if self.config.WrapperPath:
             cmd.insert(0, self.config.WrapperPath)
 
         env = os.environ.copy()
