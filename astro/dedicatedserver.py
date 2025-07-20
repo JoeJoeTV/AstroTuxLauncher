@@ -883,6 +883,10 @@ class AstroDedicatedServer:
         LOGGER.debug("Starting Dedicated Server process...")
         
         cmd = [self.wine_exec, path.join(self.astro_path, "AstroServer.exe"), "-log"]
+
+        if self.launcher.config.WrapperPath is not None and self.launcher.config.WrapperPath is not "":
+            cmd.insert(0, self.launcher.config.WrapperPath)
+
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
@@ -903,6 +907,10 @@ class AstroDedicatedServer:
             self.process_out_thread.stop()
         
         cmd = [self.wineserver_exec, "-k", "-w"]
+
+        if self.launcher.config.WrapperPath is not None and self.launcher.config.WrapperPath is not "":
+            cmd.insert(0, self.launcher.config.WrapperPath)
+
         env = os.environ.copy()
         env["WINEPREFIX"] = self.wine_pfx
         
