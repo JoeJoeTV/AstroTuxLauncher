@@ -65,9 +65,11 @@
         );
         # everything needed to run the server that isn't python
         pack = [
-          pkgs.wineWowPackages.stable
+          pkgs.wineWowPackages.staging
           pkgs.dotnet-sdk_8
           pkgs.depotdownloader
+	  pkgs.winetricks
+	  pkgs.gnutls
         ];
       in
       {
