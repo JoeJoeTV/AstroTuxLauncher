@@ -9,6 +9,7 @@ Launcher and management utility for running an Astroneer Dedicated Server on Lin
 - Python packages in `requirements.txt`
 - Wine
 - A public IP or something like playit.gg
+- An X server (this does not work on a headless machine!)
 
 ## How to use
 
