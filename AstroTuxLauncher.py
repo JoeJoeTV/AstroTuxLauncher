@@ -4,7 +4,15 @@ import os
 from os import path
 import argparse
 import json
-import tomli, tomli_w
+import sys
+
+# see https://stackoverflow.com/a/79631808
+if sys.version_info >= (3, 11):
+    import tomllib as tomli
+else:
+    import tomli
+
+import tomli_w
 import dataclasses
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config
@@ -15,7 +23,6 @@ from enum import Enum
 from pansi import ansi
 import utils.interface as interface
 import logging
-import sys
 from queue import Queue
 import shutil
 from utils import steam
