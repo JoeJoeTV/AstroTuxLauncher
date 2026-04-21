@@ -495,7 +495,7 @@ class AstroDedicatedServer:
             
             # If not connected to RCON, skip following code as it requires RCON
             if not self.rcon.connected:
-                logging("RCON is not connected, skipping related functionality")
+                LOGGER.debug("RCON is not connected, skipping related functionality")
                 time.sleep(self.launcher.config.ServerStatusInterval)
                 continue
             
