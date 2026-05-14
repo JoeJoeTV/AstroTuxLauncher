@@ -230,15 +230,15 @@ def net_test_nonlocal(ip, port):
     server_thread = threading.Thread(target=nonlocal_socket_server, args=(port,))
     server_thread.start()
     
+    resp = None
+
     # Use external service to test connection
     try:
         resp = get_request(f"https://astroservercheck.joejoetv.de/api/check?url={ip}:{port}", timeout=10)
         json_resp = json.load(resp)
+        return json_resp["server"]["network"]
     except:
         LOGGER.warning("Connection to external service failed")
         LOGGER.warning("Unable to verify connectivity from outside local network")
         LOGGER.debug(f"Response from external Service: {str(resp)}")
         return False
-    
-    
-    return json_resp["server"]["network"]
