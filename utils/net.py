@@ -231,6 +231,7 @@ def net_test_nonlocal(ip, port):
     server_thread.start()
     
     # Use external service to test connection
+    resp = None
     try:
         resp = get_request(f"https://astroservercheck.joejoetv.de/api/check?url={ip}:{port}", timeout=10)
         json_resp = json.load(resp)
@@ -239,6 +240,9 @@ def net_test_nonlocal(ip, port):
         LOGGER.warning("Unable to verify connectivity from outside local network")
         LOGGER.debug(f"Response from external Service: {str(resp)}")
         return False
-    
-    
-    return json_resp["server"]["network"]
+
+    try:
+        return json_resp["server"]["network"]
+    except (KeyError, TypeError):
+        LOGGER.warning("Unexpected response structure from external service")
+        return False
