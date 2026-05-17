@@ -111,6 +111,9 @@ ServerStatusInterval = 3.0
 # (Boolean) Wether to force disable encryption for the Dedicated Server
 DisableEncryption = true
 
+# (Optional, Path as String) Path to executable of a wrapper for Wine (e.g. Box64)
+WrapperPath = # Not set by default
+
 
 # Settings related to sending notifications to external services
 [launcher.notifications]

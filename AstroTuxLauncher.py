@@ -143,7 +143,9 @@ class LauncherConfig:
     ServerStatusInterval: float = 3             # Time to wait between Server Status checks
     
     DisableEncryption: bool = True  # Wether to disable encryption for the Astroneer DS. CURRENTLY REQUIRED TO BE "True" FOR HOSTING ON LINUX
-        
+
+    WrapperPath: Optional[str] = field(metadata=config(exclude=ExcludeIfNone), default=None) # Optional wrapper to run Wine with (e.g. box64)
+
     @staticmethod
     def ensure_toml_config(config_path):
         """
@@ -322,6 +324,10 @@ class AstroTuxLauncher():
         LOGGER.debug("Ensuring WINE prefix is setup...")
         timeout = self.config.WineBootTimeout
         cmd = [self.wineexec, "wineboot"]
+
+        if self.config.WrapperPath:
+            cmd.insert(0, self.config.WrapperPath)
+
         env = os.environ.copy()
         
         # Remove DISPLAY environment variable to stop wine from creating a window
